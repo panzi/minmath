@@ -1,0 +1,4 @@
+minmath
+*.o
+.*.swp
+*~
