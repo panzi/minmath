@@ -1,4 +1,8 @@
 minmath
+minmath_test
 *.o
 .*.swp
 *~
+perf.data
+perf.data.old
+.vscode

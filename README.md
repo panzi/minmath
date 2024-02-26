@@ -46,13 +46,13 @@ This is really all you need, no more head scratching than that.
 
 ```BNF
 EXPRESSION := SUM
-SUM        := PRODUCT (("+" | "-") PRODUCT)*
-PRODUCT    := UNARY (("*" | "/") UNARY)*
-UNARY      := "-"* ATOM
+SUM        := PRODUCT {("+" | "-") PRODUCT}
+PRODUCT    := UNARY {("*" | "/") UNARY}
+UNARY      := {"+" | "-"} ATOM
 ATOM       := VARIABLE | INTEGER | "(" EXPRESSION ")"
 
-VARIABLE   := ("a" ... "z" | "a" ... "z" | "_") ("a" ... "z" | "a" ... "z" | "_" | "0" ... "9")*
-INTEGER    := ("+" | "-")? ("0" ... "9")+
+VARIABLE   := ("a" ... "z" | "a" ... "z" | "_") {"a" ... "z" | "a" ... "z" | "_" | "0" ... "9"}
+INTEGER    := ["+" | "-"] {"0" ... "9"}
 
 COMMENT    := "#" NOT_NEWLINE* ("\n" | EOF)
 ```
@@ -69,7 +69,7 @@ The actual parser operates on these tokens.
 To write the parser simply write one function for each rule in the BNF that
 aren't corresponding to tokens (and thus already handled by the tokenizer).
 Where another rule is mentioned you do a recursive call to the corresponding
-parser function. `(` `)*` is translated to loops. The loop condition needs to
+parser function. `{` `}` is translated to loops. The loop condition needs to
 look ahead one single token to be able to determine when to break. Most
 programming languages don't need more lookahead than one single token.
 
@@ -77,3 +77,6 @@ That's it. Enjoy!
 
 There are other more complicated ways to write much more efficient parsers,
 but as a first step this good enough.
+
+But there is also one alternative parser included in the source that is a
+tiny bit faster.
