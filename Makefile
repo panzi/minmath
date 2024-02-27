@@ -1,23 +1,39 @@
 CC = gcc
-OBJ = minmath.o
-BIN = minmath
-CFLAGS = -Wall -Werror -std=gnu11 -g -O2 -Wno-overflow
+SHARED_OBJ = build/alt_parser.o \
+             build/ast.o \
+             build/parser.o \
+             build/tokenizer.o
+OBJ = $(SHARED_OBJ) \
+      build/main.o
+TEST_OBJ = $(SHARED_OBJ) \
+           build/testdata.o \
+           build/test.o
+BIN = build/minmath
+TEST_BIN = build/minmath_test
+CFLAGS = -Wall -Werror -std=gnu11 -O2 -Wno-overflow
+RELEASE = 0
+
+ifeq ($(RELEASE),1)
+CFLAGS += -DNDEBUG
+else
+CFLAGS += -g
+endif
 
 .PHONY: all clean test
 
-all: minmath
+all: $(BIN)
 
-test: minmath_test
-	./minmath_test
+test: $(TEST_BIN)
+	$(TEST_BIN)
 
-%.o: %.c
+build/%.o: src/%.c
 	$(CC) $(CFLAGS) $< -c -o $@
 
-minmath: minmath.o
-	$(CC) $(CFLAGS) $< -o $@
+$(BIN): $(OBJ)
+	$(CC) $(CFLAGS) $(OBJ) -o $@
 
-minmath_test: minmath.c
-	$(CC) $(CFLAGS) -DTEST=1 $< -o $@
+$(TEST_BIN): $(TEST_OBJ)
+	$(CC) $(CFLAGS) $(TEST_OBJ) -o $@
 
 clean:
-	rm -rv $(OBJ) $(BIN) minmath_test perf.data perf.data.old
+	rm -rv $(OBJ) $(TEST_OBJ) $(BIN) $(TEST_BIN) perf.data perf.data.old

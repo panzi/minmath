@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# generate some expressions to be used in tests
+
 from typing import NamedTuple, Protocol
 from random import randint, choice, random
 
