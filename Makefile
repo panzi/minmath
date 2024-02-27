@@ -2,7 +2,8 @@ CC = gcc
 SHARED_OBJ = build/alt_parser.o \
              build/ast.o \
              build/parser.o \
-             build/tokenizer.o
+             build/tokenizer.o \
+             build/parser_error.o
 OBJ = $(SHARED_OBJ) \
       build/main.o
 TEST_OBJ = $(SHARED_OBJ) \
