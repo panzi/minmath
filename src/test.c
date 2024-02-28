@@ -18,7 +18,7 @@ struct ParseFunc {
 };
 
 const struct ParseFunc PARSE_FUNCS[] = {
-    { "recursive descend", parse_expression_from_string },
+    { "recursive descent", parse_expression_from_string },
     { "pratt", parse_expression_from_string },
     { NULL, NULL },
 };
