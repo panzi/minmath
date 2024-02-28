@@ -2,6 +2,7 @@ minmath
 minmath_test
 *.o
 .*.swp
+.swp
 *~
 perf.data
 perf.data.old

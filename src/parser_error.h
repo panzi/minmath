@@ -3,6 +3,7 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,7 +28,8 @@ struct SourceLocation {
 };
 
 struct SourceLocation get_source_location(const char *source, size_t offset);
-void print_parser_error(const char *source, const struct ErrorInfo *error, size_t context_lines);
+void print_source_location(FILE *stream, const char *source, size_t offset, size_t context_lines);
+void print_parser_error(FILE *stream, const char *source, const struct ErrorInfo *error, size_t context_lines);
 const char *get_error_message(enum ParserError error);
 enum ParserError get_error_code(const char *error_name);
 

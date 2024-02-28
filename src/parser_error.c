@@ -9,6 +9,7 @@
 static size_t find_line_start(const char *source, size_t offset);
 static size_t find_line_end(const char *source, size_t offset);
 static inline int get_num_len(size_t num);
+static void print_source_location_intern(FILE *stream, const char *source, size_t offset, struct SourceLocation loc, size_t context_lines);
 
 enum ParserError get_error_code(const char *error_name) {
     if (strcmp(error_name, "OK") == 0) {
@@ -31,25 +32,20 @@ enum ParserError get_error_code(const char *error_name) {
 }
 
 struct SourceLocation get_source_location(const char *source, size_t offset) {
-    const char *ptr = source + offset;
-    size_t column = 0;
+    const char *pos = source + offset;
+    const char *ptr = source;
+    size_t column = 1;
     size_t lineno = 1;
 
-    if (*ptr == '\n') {
-        -- ptr;
-        ++ column;
-    }
-
-    while (ptr >= source && *ptr != '\n') {
-        ++ column;
-        -- ptr;
-    }
-
-    while (ptr >= source) {
+    while (ptr < pos) {
         if (*ptr == '\n') {
             ++ lineno;
+            column = 1;
+        } else {
+            ++ column;
         }
-        -- ptr;
+
+        ++ ptr;
     }
 
     return (struct SourceLocation){
@@ -80,10 +76,7 @@ const char *get_error_message(enum ParserError error) {
 
 size_t find_line_start(const char *source, size_t offset) {
     const char *ptr = source + offset;
-    if (*ptr == '\n') {
-        -- ptr;
-    }
-    while (ptr > source && *ptr != '\n') {
+    while (ptr > source && ptr[-1] != '\n') {
         -- ptr;
     }
 
@@ -112,23 +105,25 @@ int get_num_len(size_t num) {
     return len;
 }
 
-static void print_source_location_intern(const char *source, size_t offset, const struct SourceLocation loc, size_t context_lines) {
-    //const size_t start_lineno = loc.lineno > context_lines ? loc.lineno - context_lines : 1;
+
+void print_source_location(FILE *stream, const char *source, size_t offset, size_t context_lines) {
+    struct SourceLocation loc = get_source_location(source, offset);
+    print_source_location_intern(stream, source, offset, loc, context_lines);
+}
+
+void print_source_location_intern(FILE *stream, const char *source, size_t offset, struct SourceLocation loc, size_t context_lines) {
+    const size_t start_lineno = loc.lineno > context_lines ? loc.lineno - context_lines : 1;
     const size_t end_lineno = loc.lineno + context_lines;
     const int lineno_padding = get_num_len(end_lineno);
 
     fputc('\n', stderr);
 
-    // XXX: broken!
-
-    size_t current_offset = offset;
-    size_t count = 0;
-    while (count < context_lines && current_offset > 0) {
-        current_offset = find_line_start(source, current_offset);
-        ++ count;
+    size_t current_lineno = loc.lineno;
+    size_t current_offset = find_line_start(source, offset);
+    while (current_lineno > start_lineno && current_offset > 0) {
+        current_offset = find_line_start(source, current_offset - 1);
+        -- current_lineno;
     }
-
-    size_t current_lineno = loc.lineno - count;
 
     while (current_lineno <= loc.lineno) {
         size_t next_offset = find_line_end(source, current_offset);
@@ -137,6 +132,9 @@ static void print_source_location_intern(const char *source, size_t offset, cons
         fputc('\n', stderr);
         ++ current_lineno;
         current_offset = next_offset;
+        if (source[current_offset] == '\n') {
+            ++ current_offset;
+        }
     }
 
     fprintf(stderr, " %*s   ", lineno_padding, "");
@@ -148,35 +146,36 @@ static void print_source_location_intern(const char *source, size_t offset, cons
     fputc('^', stderr);
     fputc('\n', stderr);
 
-    while (current_lineno < end_lineno && source[current_offset]) {
+    while (current_lineno <= end_lineno && source[current_offset]) {
         size_t next_offset = find_line_end(source, current_offset);
         fprintf(stderr, " %*zu | ", lineno_padding, current_lineno);
         fwrite(source + current_offset, 1, next_offset - current_offset, stderr);
         fputc('\n', stderr);
         ++ current_lineno;
         current_offset = next_offset;
+        if (source[current_offset] == '\n') {
+            ++ current_offset;
+        }
     }
 
     fputc('\n', stderr);
 }
 
-void print_parser_error(const char *source, const struct ErrorInfo *error, size_t context_lines) {
+void print_parser_error(FILE *stream, const char *source, const struct ErrorInfo *error, size_t context_lines) {
     struct SourceLocation loc = get_source_location(source, error->offset);
 
-    fprintf(stderr, "At line %zu on column %zu: %s\n\n", loc.lineno, loc.column, get_error_message(error->error));
+    fprintf(stderr, "On line %zu at column %zu: %s\n", loc.lineno, loc.column, get_error_message(error->error));
 
-    print_source_location_intern(source, error->offset, loc, context_lines);
+    print_source_location_intern(stream, source, error->offset, loc, context_lines);
 
     if (error->offset != error->context_offset) {
-        struct SourceLocation context_loc = get_source_location(source, error->context_offset);
+        fprintf(stderr, "See other location:\n");
 
-        fprintf(stderr, "See other location:\n\n");
-
-        print_source_location_intern(source, error->context_offset, context_loc, context_lines);
+        print_source_location(stream, source, error->context_offset, context_lines);
     }
 }
 
-#ifdef TEST
+#ifdef PARSER_ERROR_BIN
 #include <string.h>
 #include <errno.h>
 #include <stdint.h>
@@ -225,7 +224,7 @@ int main(int argc, char *argv[]) {
         .context_offset = (size_t) context_offset,
     };
 
-    print_parser_error(source, &error, 3);
+    print_parser_error(stderr, source, &error, 3);
 
     return 0;
 }
