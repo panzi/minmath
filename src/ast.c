@@ -6,8 +6,45 @@
 
 #define AST_MALLOC() malloc(sizeof(struct AstNode))
 
+struct AstNode *ast_create_terneary(struct AstNode *cond, struct AstNode *then_expr, struct AstNode *else_expr) {
+    struct AstNode *node = AST_MALLOC();
+    if (node == NULL) {
+        return NULL;
+    }
+
+    *node = (struct AstNode){
+        .type = NODE_IF,
+        .data = {
+            .terneary = {
+                .cond      = cond,
+                .then_expr = then_expr,
+                .else_expr = else_expr,
+            }
+        }
+    };
+
+    return node;
+}
+
 struct AstNode *ast_create_binary(enum NodeType type, struct AstNode *lhs, struct AstNode *rhs) {
-    assert(type == NODE_ADD || type == NODE_SUB || type == NODE_MUL || type == NODE_DIV);
+    assert(
+        type == NODE_ADD ||
+        type == NODE_SUB ||
+        type == NODE_MUL ||
+        type == NODE_DIV ||
+        type == NODE_MOD ||
+        type == NODE_OR ||
+        type == NODE_AND ||
+        type == NODE_LT ||
+        type == NODE_GT ||
+        type == NODE_LE ||
+        type == NODE_GE ||
+        type == NODE_EQ ||
+        type == NODE_NE ||
+        type == NODE_BIT_OR ||
+        type == NODE_BIT_XOR ||
+        type == NODE_BIT_AND
+    );
 
     struct AstNode *node = AST_MALLOC();
     if (node == NULL) {
@@ -17,7 +54,7 @@ struct AstNode *ast_create_binary(enum NodeType type, struct AstNode *lhs, struc
     *node = (struct AstNode){
         .type = type,
         .data = {
-            .children = {
+            .binary = {
                 .lhs = lhs,
                 .rhs = rhs,
             }
@@ -28,7 +65,7 @@ struct AstNode *ast_create_binary(enum NodeType type, struct AstNode *lhs, struc
 }
 
 struct AstNode *ast_create_unary(enum NodeType type, struct AstNode *child) {
-    assert(type == NODE_NEG);
+    assert(type == NODE_NEG || type == NODE_BIT_NEG || type == NODE_NOT);
 
     struct AstNode *node = AST_MALLOC();
     if (node == NULL) {
@@ -78,27 +115,49 @@ struct AstNode *ast_create_var(char *name) {
 }
 
 void ast_free(struct AstNode *node) {
-    switch (node->type) {
-        case NODE_ADD:
-        case NODE_SUB:
-        case NODE_MUL:
-        case NODE_DIV:
-            ast_free(node->data.children.lhs);
-            ast_free(node->data.children.rhs);
-            break;
+    if (node != NULL) {
+        switch (node->type) {
+            case NODE_ADD:
+            case NODE_SUB:
+            case NODE_MUL:
+            case NODE_DIV:
+            case NODE_MOD:
+            case NODE_AND:
+            case NODE_OR:
+            case NODE_LT:
+            case NODE_GT:
+            case NODE_LE:
+            case NODE_GE:
+            case NODE_EQ:
+            case NODE_NE:
+            case NODE_BIT_AND:
+            case NODE_BIT_OR:
+            case NODE_BIT_XOR:
+                ast_free(node->data.binary.lhs);
+                ast_free(node->data.binary.rhs);
+                break;
 
-        case NODE_NEG:
-            ast_free(node->data.child);
-            break;
+            case NODE_IF:
+                ast_free(node->data.terneary.cond);
+                ast_free(node->data.terneary.then_expr);
+                ast_free(node->data.terneary.else_expr);
+                break;
 
-        case NODE_VAR:
-            free(node->data.ident);
-            break;
+            case NODE_NEG:
+            case NODE_BIT_NEG:
+            case NODE_NOT:
+                ast_free(node->data.child);
+                break;
 
-        case NODE_INT:
-            break;
+            case NODE_VAR:
+                free(node->data.ident);
+                break;
+
+            case NODE_INT:
+                break;
+        }
+        free(node);
     }
-    free(node);
 }
 
 // ========================================================================== //
@@ -111,30 +170,115 @@ int ast_execute(struct AstNode *expr) {
     switch (expr->type) {
         case NODE_ADD:
             return (
-                ast_execute(expr->data.children.lhs) +
-                ast_execute(expr->data.children.rhs)
+                ast_execute(expr->data.binary.lhs) +
+                ast_execute(expr->data.binary.rhs)
             );
 
         case NODE_SUB:
             return (
-                ast_execute(expr->data.children.lhs) -
-                ast_execute(expr->data.children.rhs)
+                ast_execute(expr->data.binary.lhs) -
+                ast_execute(expr->data.binary.rhs)
             );
 
         case NODE_MUL:
             return (
-                ast_execute(expr->data.children.lhs) *
-                ast_execute(expr->data.children.rhs)
+                ast_execute(expr->data.binary.lhs) *
+                ast_execute(expr->data.binary.rhs)
             );
 
         case NODE_DIV:
             return (
-                ast_execute(expr->data.children.lhs) /
-                ast_execute(expr->data.children.rhs)
+                ast_execute(expr->data.binary.lhs) /
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_MOD:
+            return (
+                ast_execute(expr->data.binary.lhs) %
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_AND:
+            return (
+                ast_execute(expr->data.binary.lhs) &&
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_OR:
+            return (
+                ast_execute(expr->data.binary.lhs) ||
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_LT:
+            return (
+                ast_execute(expr->data.binary.lhs) <
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_GT:
+            return (
+                ast_execute(expr->data.binary.lhs) >
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_LE:
+            return (
+                ast_execute(expr->data.binary.lhs) <=
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_GE:
+            return (
+                ast_execute(expr->data.binary.lhs) >=
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_EQ:
+            return (
+                ast_execute(expr->data.binary.lhs) ==
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_NE:
+            return (
+                ast_execute(expr->data.binary.lhs) !=
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_BIT_AND:
+            return (
+                ast_execute(expr->data.binary.lhs) &
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_BIT_OR:
+            return (
+                ast_execute(expr->data.binary.lhs) |
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_BIT_XOR:
+            return (
+                ast_execute(expr->data.binary.lhs) ^
+                ast_execute(expr->data.binary.rhs)
             );
 
         case NODE_NEG:
             return -ast_execute(expr->data.child);
+
+        case NODE_BIT_NEG:
+            return ~ast_execute(expr->data.child);
+
+        case NODE_NOT:
+            return !ast_execute(expr->data.child);
+
+        case NODE_IF:
+            return (
+                ast_execute(expr->data.terneary.cond) ?
+                ast_execute(expr->data.terneary.then_expr) :
+                ast_execute(expr->data.terneary.else_expr)
+            );
 
         case NODE_INT:
             return expr->data.value;

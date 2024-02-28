@@ -7,10 +7,12 @@ from random import randint, choice, random
 
 ident_start = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 ident_next  = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-bin_ops   = "+-*/"
-unary_ops = "+-"
+bin_ops   = ["+", "-", "*", "/", "%", "<", ">", "<=", ">=", "==", "!=", "&", "|", "^", "&&", "||"]
+unary_ops = "+-~!"
 whitespace = " \t\r\n\v"
-expr_types = "buv0("
+non_terneary = "buv0("
+expr_types = "buv0(?"
+leaf_types = "v0"
 
 def gen_name():
     first = choice(ident_start)
@@ -53,6 +55,20 @@ class Paren(NamedTuple):
     def c_expr(self, vars: dict[str, int]) -> str:
         return f'({self.child.c_expr(vars)})'
 
+class If(NamedTuple):
+    cond: Node
+    then_expr: Node
+    else_expr: Node
+
+    def __str__(self):
+        return f'{self.cond}{gen_whitespace()}?{gen_whitespace()}{self.then_expr}{gen_whitespace()}:{gen_whitespace()}{self.else_expr}'
+
+    def eval(self, vars: dict[str, int]) -> int:
+        return self.then_expr.eval(vars) if self.cond.eval(vars) else self.else_expr.eval(vars)
+
+    def c_expr(self, vars: dict[str, int]) -> str:
+        return f'{self.cond.c_expr(vars)} ? {self.then_expr.c_expr(vars)} : {self.else_expr.c_expr(vars)}'
+
 class BinOp(NamedTuple):
     op: str
     lhs: Node
@@ -62,18 +78,40 @@ class BinOp(NamedTuple):
         return f'{self.lhs}{gen_whitespace()}{self.op}{gen_whitespace()}{self.rhs}'
 
     def eval(self, vars: dict[str, int]) -> int:
-        lhs = self.lhs.eval(vars)
-        rhs = self.rhs.eval(vars)
         op = self.op
 
         if op == '+':
-            value = lhs + rhs
+            value = self.lhs.eval(vars) + self.rhs.eval(vars)
         elif op == '-':
-            value = lhs - rhs
+            value = self.lhs.eval(vars) - self.rhs.eval(vars)
         elif op == '*':
-            value = lhs * rhs
+            value = self.lhs.eval(vars) * self.rhs.eval(vars)
         elif op == '/':
-            value = lhs // rhs
+            value = self.lhs.eval(vars) // self.rhs.eval(vars)
+        elif op == '%':
+            value = self.lhs.eval(vars) % self.rhs.eval(vars)
+        elif op == '^':
+            value = self.lhs.eval(vars) ^ self.rhs.eval(vars)
+        elif op == '|':
+            value = self.lhs.eval(vars) | self.rhs.eval(vars)
+        elif op == '&':
+            value = self.lhs.eval(vars) & self.rhs.eval(vars)
+        elif op == '&&':
+            value = int(self.lhs.eval(vars) and self.rhs.eval(vars))
+        elif op == '||':
+            value = int(self.lhs.eval(vars) or self.rhs.eval(vars))
+        elif op == '<':
+            value = int(self.lhs.eval(vars) < self.rhs.eval(vars))
+        elif op == '>':
+            value = int(self.lhs.eval(vars) > self.rhs.eval(vars))
+        elif op == '<=':
+            value = int(self.lhs.eval(vars) <= self.rhs.eval(vars))
+        elif op == '>=':
+            value = int(self.lhs.eval(vars) >= self.rhs.eval(vars))
+        elif op == '==':
+            value = int(self.lhs.eval(vars) == self.rhs.eval(vars))
+        elif op == '!=':
+            value = int(self.lhs.eval(vars) != self.rhs.eval(vars))
         else:
             raise TypeError(f'illegal operator: {op}')
 
@@ -81,7 +119,6 @@ class BinOp(NamedTuple):
 
     def c_expr(self, vars: dict[str, int]) -> str:
         return f'{self.lhs.c_expr(vars)} {self.op} {self.rhs.c_expr(vars)}'
-
 
 class Unary(NamedTuple):
     op: str
@@ -94,6 +131,10 @@ class Unary(NamedTuple):
         value = self.child.eval(vars)
         if self.op == '-':
             value = int32(-value)
+        elif self.op == '!':
+            value = int(not value)
+        elif self.op == '~':
+            value = ~value
         return value
 
     def c_expr(self, vars: dict[str, int]) -> str:
@@ -123,14 +164,14 @@ class Int(NamedTuple):
     def c_expr(self, vars: dict[str, int]) -> str:
         return str(self.value)
 
-def gen_expr(vars: set[str]) -> Node:
+def gen_expr_old(vars: set[str]) -> Node:
     expr_type = choice(expr_types)
     if expr_type == 'b':
         op = choice(bin_ops)
-        return BinOp(op, gen_expr(vars), gen_expr(vars))
+        return BinOp(op, gen_expr_old(vars), gen_expr_old(vars))
     elif expr_type == 'u':
         op = choice(unary_ops)
-        return Unary(op, gen_expr(vars))
+        return Unary(op, gen_expr_old(vars))
     elif expr_type == 'v':
         var = gen_name()
         vars.add(var)
@@ -138,9 +179,43 @@ def gen_expr(vars: set[str]) -> Node:
     elif expr_type == '0':
         return Int(gen_value())
     elif expr_type == '(':
-        return Paren(gen_expr(vars))
+        return Paren(gen_expr_old(vars))
+    elif expr_type == '?':
+        return If(gen_expr_old(vars), gen_expr_old(vars), gen_expr_old(vars))
     else:
         raise TypeError(f'illegal expression type: {expr_type}')
+
+def gen_expr(vars: set[str], size: int) -> Node:
+    def gen_expr():
+        nonlocal size
+        size -= 1
+
+        if size > 2:
+            expr_type = choice(expr_types)
+        elif size > 1:
+            expr_type = choice(non_terneary)
+        else:
+            expr_type = choice(leaf_types)
+
+        if expr_type == 'b':
+            op = choice(bin_ops)
+            return BinOp(op, gen_expr(), gen_expr())
+        elif expr_type == 'u':
+            op = choice(unary_ops)
+            return Unary(op, gen_expr())
+        elif expr_type == 'v':
+            var = gen_name()
+            vars.add(var)
+            return Var(var)
+        elif expr_type == '0':
+            return Int(gen_value())
+        elif expr_type == '(':
+            return Paren(gen_expr())
+        elif expr_type == '?':
+            return If(gen_expr(), gen_expr(), gen_expr())
+        else:
+            raise TypeError(f'illegal expression type: {expr_type}')
+    return gen_expr()
 
 class TestCase(NamedTuple):
     expr: str
@@ -161,7 +236,7 @@ def gen_testcase():
     while True:
         vars: set[str] = set()
         environ: dict[str, int] = {}
-        expr = gen_expr(vars)
+        expr = gen_expr(vars, 16)
         #print(expr)
         for var in vars:
             environ[var] = gen_value()
@@ -179,6 +254,6 @@ def gen_testcase():
         )
 
 if __name__ == '__main__':
-    for _ in range(100):
+    for _ in range(1024):
         test = gen_testcase()
         print(f'    {test},')

@@ -26,10 +26,6 @@ struct Parser {
 
 struct AstNode *parse_expression_from_string(const char *input, struct ErrorInfo *error);
 struct AstNode *parse_expression(struct Parser *parser);
-struct AstNode *parse_sum(struct Parser *parser);
-struct AstNode *parse_product(struct Parser *parser);
-struct AstNode *parse_unary(struct Parser *parser);
-struct AstNode *parse_atom(struct Parser *parser);
 void parser_free(struct Parser *parser);
 
 #ifdef __cplusplus

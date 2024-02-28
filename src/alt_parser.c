@@ -45,6 +45,45 @@ struct AstNode *alt_parse_expression_from_string(const char *input, struct Error
 struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct AstNode *left, int min_precedence) {
     enum TokenType token = peek_token(&parser->tokenizer);
 
+    if (token == TOK_QUEST) {
+        // TODO: not sure if this is the right place
+        next_token(&parser->tokenizer);
+
+        size_t start_offset = parser->tokenizer.token_pos;
+        struct AstNode *then_expr = alt_parse_expression(parser, 0);
+        if (then_expr == NULL) {
+            ast_free(left);
+            return NULL;
+        }
+
+        if (next_token(&parser->tokenizer) != TOK_COLON) {
+            parser->error.error  = PARSER_ERROR_ILLEGAL_TOKEN;
+            parser->error.offset = parser->tokenizer.token_pos;
+            parser->error.context_offset = start_offset;
+            ast_free(left);
+            return NULL;
+        }
+
+        struct AstNode *else_expr = alt_parse_expression(parser, 0);
+        if (else_expr == NULL) {
+            ast_free(left);
+            ast_free(then_expr);
+            return NULL;
+        }
+
+        struct AstNode *if_expr = ast_create_terneary(left, then_expr, else_expr);
+        if (if_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(left);
+            ast_free(then_expr);
+            ast_free(else_expr);
+            return NULL;
+        }
+
+        return if_expr;
+    }
+
     if (!is_binary_operation(token)) {
         return left;
     }
@@ -99,22 +138,47 @@ struct AstNode *alt_parse_expression(struct AltParser *parser, int min_precedenc
 
 struct AstNode *alt_parse_leaf(struct AltParser *parser) {
     enum TokenType token = next_token(&parser->tokenizer);
-    bool negate = false;
     struct AstNode *expr = NULL;
+    struct AstNode **bottom_expr = NULL;
+    struct AstNode *child = NULL;
 
     for (;;) {
+        if (token == TOK_PLUS) {
+            token = next_token(&parser->tokenizer);
+            continue;
+        }
+
+        struct AstNode *child;
         if (token == TOK_MINUS) {
-            negate = !negate;
-        } else if (token != TOK_PLUS) {
+            child = ast_create_unary(NODE_NEG, expr);
+        } else if (token == TOK_BIT_NEG) {
+            child = ast_create_unary(NODE_BIT_NEG, expr);
+        } else if (token == TOK_NOT) {
+            child = ast_create_unary(NODE_NOT, expr);
+        } else {
             break;
         }
+
+        if (child == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(expr);
+            return NULL;
+        }
+
+        if (expr == NULL) {
+            bottom_expr = &child;
+        }
+        expr = child;
+
         token = next_token(&parser->tokenizer);
     }
 
     switch (token) {
         case TOK_INT:
-            expr = ast_create_int(parser->tokenizer.value);
-            if (expr == NULL) {
+            child = ast_create_int(parser->tokenizer.value);
+            if (child == NULL) {
+                ast_free(expr);
                 parser->error.error  = PARSER_ERROR_MEMORY;
                 parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
                 return NULL;
@@ -123,8 +187,9 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
 
         case TOK_IDENT:
             // re-use memory allocated for tokenizer->ident
-            expr = ast_create_var(parser->tokenizer.ident);
-            if (expr == NULL) {
+            child = ast_create_var(parser->tokenizer.ident);
+            if (child == NULL) {
+                ast_free(expr);
                 parser->error.error  = PARSER_ERROR_MEMORY;
                 parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
                 return NULL;
@@ -132,20 +197,22 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
             parser->tokenizer.ident = NULL;
             break;
 
-        case TOK_OPEN_PAREN:
+        case TOK_LPAREN:
         {
             size_t start_offset = parser->tokenizer.token_pos;
-            expr = alt_parse_expression(parser, 0);
-            if (expr == NULL) {
+            child = alt_parse_expression(parser, 0);
+            if (child == NULL) {
+                ast_free(expr);
                 return NULL;
             }
 
-            if (next_token(&parser->tokenizer) != TOK_CLOSE_PAREN) {
+            if (next_token(&parser->tokenizer) != TOK_RPAREN) {
                 if (!token_is_error(parser->tokenizer.token)) {
                     parser->error.error  = PARSER_ERROR_EXPECTED_CLOSE_PAREN;
                     parser->error.offset = parser->tokenizer.token_pos;
                     parser->error.context_offset = start_offset;
                 }
+                ast_free(child);
                 ast_free(expr);
                 return NULL;
             }
@@ -162,18 +229,12 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
             return NULL;
     }
 
-    if (negate) {
-        struct AstNode *new_expr = ast_create_unary(NODE_NEG, expr);
-        if (new_expr == NULL) {
-            parser->error.error  = PARSER_ERROR_MEMORY;
-            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            return NULL;
-        }
-        expr = new_expr;
+    if (expr != NULL) {
+        *bottom_expr = child;
+        return expr;
     }
 
-    return expr;
+    return child;
 }
 
 bool is_binary_operation(enum TokenType token) {
@@ -182,6 +243,18 @@ bool is_binary_operation(enum TokenType token) {
         case TOK_MINUS:
         case TOK_MUL:
         case TOK_DIV:
+        case TOK_MOD:
+        case TOK_BIT_OR:
+        case TOK_BIT_XOR:
+        case TOK_BIT_AND:
+        case TOK_AND:
+        case TOK_OR:
+        case TOK_LT:
+        case TOK_GT:
+        case TOK_LE:
+        case TOK_GE:
+        case TOK_EQ:
+        case TOK_NE:
             return true;
 
         default:
@@ -191,20 +264,49 @@ bool is_binary_operation(enum TokenType token) {
 
 int get_precedence(enum NodeType type) {
     switch (type) {
+        case NODE_IF:
+            return 1;
+
+        case NODE_OR:
+            return 2;
+
+        case NODE_AND:
+            return 2;
+
+        case NODE_LT:
+        case NODE_GT:
+        case NODE_LE:
+        case NODE_GE:
+        case NODE_EQ:
+        case NODE_NE:
+            return 3;
+
+        case NODE_BIT_OR:
+            return 4;
+
+        case NODE_BIT_XOR:
+            return 4;
+
+        case NODE_BIT_AND:
+            return 5;
+
         case NODE_ADD:
         case NODE_SUB:
-            return 1;
+            return 6;
 
         case NODE_MUL:
         case NODE_DIV:
-            return 2;
+        case NODE_MOD:
+            return 7;
 
         case NODE_NEG:
-            return 3;
+        case NODE_BIT_NEG:
+        case NODE_NOT:
+            return 8;
 
         case NODE_VAR:
         case NODE_INT:
-            return 4;
+            return 9;
 
         default:
             assert(false);
@@ -214,10 +316,22 @@ int get_precedence(enum NodeType type) {
 
 enum NodeType get_binary_node_type(enum TokenType token) {
     switch (token) {
-        case TOK_PLUS:  return NODE_ADD;
-        case TOK_MINUS: return NODE_SUB;
-        case TOK_MUL:   return NODE_MUL;
-        case TOK_DIV:   return NODE_DIV;
+        case TOK_PLUS:    return NODE_ADD;
+        case TOK_MINUS:   return NODE_SUB;
+        case TOK_MUL:     return NODE_MUL;
+        case TOK_DIV:     return NODE_DIV;
+        case TOK_MOD:     return NODE_MOD;
+        case TOK_BIT_OR:  return NODE_BIT_OR;
+        case TOK_BIT_XOR: return NODE_BIT_XOR;
+        case TOK_BIT_AND: return NODE_BIT_AND;
+        case TOK_AND:     return NODE_AND;
+        case TOK_OR:      return NODE_OR;
+        case TOK_LT:      return NODE_LT;
+        case TOK_GT:      return NODE_GT;
+        case TOK_LE:      return NODE_LE;
+        case TOK_GE:      return NODE_GE;
+        case TOK_EQ:      return NODE_EQ;
+        case TOK_NE:      return NODE_NE;
 
         default:
             assert(false);

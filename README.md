@@ -45,16 +45,23 @@ are handled in the same rule as alternatives in a list of these operations.
 This is really all you need, no more head scratching than that.
 
 ```BNF
-EXPRESSION := SUM
+EXPRESSION := CONDITION
+CONDITION  := OR ["?" OR ":" OR]
+OR         := AND {"||" AND}
+AND        := COMPARE {"&&" COMPARE}
+COMPARE    := BIT_OR {("<" | ">" | "<=" | ">=" | "==" | "!=") BIT_OR}
+BIT_OR     := BIT_XOR {"|" BIT_XOR}
+BIT_XOR    := BIT_AND {"^" BIT_AND}
+BIT_AND    := SUM {"&" SUM}
 SUM        := PRODUCT {("+" | "-") PRODUCT}
-PRODUCT    := UNARY {("*" | "/") UNARY}
-UNARY      := {"+" | "-"} ATOM
+PRODUCT    := UNARY {("*" | "/" | "%") UNARY}
+UNARY      := {"+" | "-" | "~" | "!"} ATOM
 ATOM       := VARIABLE | INTEGER | "(" EXPRESSION ")"
 
 VARIABLE   := ("a" ... "z" | "a" ... "z" | "_") {"a" ... "z" | "a" ... "z" | "_" | "0" ... "9"}
 INTEGER    := ["+" | "-"] {"0" ... "9"}
 
-COMMENT    := "#" NOT_NEWLINE* ("\n" | EOF)
+COMMENT    := "#" {NOT_NEWLINE} ("\n" | EOF)
 ```
 
 Writing a Parser

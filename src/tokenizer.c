@@ -101,8 +101,59 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
         case '/':
         case '(':
         case ')':
+        case '?':
+        case ':':
+        case '~':
+        case '^':
             tokenizer->input_pos ++;
             return tokenizer->token = (enum TokenType) ch;
+
+        case '&':
+            tokenizer->input_pos ++;
+            if (tokenizer->input[tokenizer->input_pos] == '&') {
+                tokenizer->input_pos ++;
+                return TOK_AND;
+            }
+            return TOK_BIT_AND;
+
+        case '|':
+            tokenizer->input_pos ++;
+            if (tokenizer->input[tokenizer->input_pos] == '&') {
+                tokenizer->input_pos ++;
+                return TOK_OR;
+            }
+            return TOK_BIT_OR;
+
+        case '<':
+            tokenizer->input_pos ++;
+            if (tokenizer->input[tokenizer->input_pos] == '=') {
+                tokenizer->input_pos ++;
+                return TOK_LE;
+            }
+            return TOK_LT;
+
+        case '>':
+            tokenizer->input_pos ++;
+            if (tokenizer->input[tokenizer->input_pos] == '=') {
+                tokenizer->input_pos ++;
+                return TOK_GE;
+            }
+            return TOK_GT;
+
+        case '=':
+            if (tokenizer->input[tokenizer->input_pos + 1] != '=') {
+                return tokenizer->token = TOK_ERROR_TOKEN;
+            }
+            tokenizer->input_pos += 2;
+            return TOK_EQ;
+
+        case '!':
+            tokenizer->input_pos ++;
+            if (tokenizer->input[tokenizer->input_pos] == '=') {
+                tokenizer->input_pos ++;
+                return TOK_NE;
+            }
+            return TOK_NOT;
 
         default:
             if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_') {
