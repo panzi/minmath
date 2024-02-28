@@ -28,6 +28,10 @@ enum ParserError get_error_code(const char *error_name) {
         return PARSER_ERROR_UNEXPECTED_EOF;
     }
 
+    if (strcmp(error_name, "EXPECTED_CLOSE_PAREN") == 0) {
+        return PARSER_ERROR_EXPECTED_CLOSE_PAREN;
+    }
+
     return -1;
 }
 
@@ -67,6 +71,9 @@ const char *get_error_message(enum ParserError error) {
 
         case PARSER_ERROR_UNEXPECTED_EOF:
             return "Unexpected end of file";
+
+        case PARSER_ERROR_EXPECTED_CLOSE_PAREN:
+            return "Expected ')'";
 
         default:
             assert(false);

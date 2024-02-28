@@ -14,7 +14,7 @@ extern char **environ;
 
 struct ParseFunc {
     const char *name;
-    struct AstNode *(*parse)(const char *input);
+    struct AstNode *(*parse)(const char *input, struct ErrorInfo *error);
 };
 
 const struct ParseFunc PARSE_FUNCS[] = {
@@ -24,6 +24,7 @@ const struct ParseFunc PARSE_FUNCS[] = {
 };
 
 int main(int argc, char *argv[]) {
+    struct ErrorInfo error;
     struct timespec ts_start, ts_end;
     struct timeval tv_start, tv_end;
     int res_start, res_end;
@@ -32,10 +33,11 @@ int main(int argc, char *argv[]) {
     for (const struct ParseFunc *func = PARSE_FUNCS; func->name; ++ func) {
         printf("Testing %s\n", func->name);
         for (const struct TestCase *test = TESTS; test->expr; ++ test) {
-            struct AstNode *expr = func->parse(test->expr);
+            struct AstNode *expr = func->parse(test->expr, &error);
             if (expr == NULL) {
                 if (test->parse_ok) {
                     fprintf(stderr, "*** [%s] Error parsing expression: %s\n", func->name, test->expr);
+                    print_parser_error(stderr, test->expr, &error, 1);
                     status = 1;
                 }
             } else {
@@ -69,10 +71,11 @@ int main(int argc, char *argv[]) {
     res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
     for (const struct TestCase *test = TESTS; test->expr; ++ test) {
         for (size_t iter = 0; iter < ITERS; ++ iter) {
-            struct AstNode *expr = parse_expression_from_string(test->expr);
+            struct AstNode *expr = parse_expression_from_string(test->expr, &error);
             if (expr == NULL) {
                 if (test->parse_ok) {
                     fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
+                    print_parser_error(stderr, test->expr, &error, 1);
                     return 1;
                 }
             } else {
@@ -97,10 +100,11 @@ int main(int argc, char *argv[]) {
     res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
     for (const struct TestCase *test = TESTS; test->expr; ++ test) {
         for (size_t iter = 0; iter < ITERS; ++ iter) {
-            struct AstNode *expr = alt_parse_expression_from_string(test->expr);
+            struct AstNode *expr = alt_parse_expression_from_string(test->expr, &error);
             if (expr == NULL) {
                 if (test->parse_ok) {
                     fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
+                    print_parser_error(stderr, test->expr, &error, 1);
                     return 1;
                 }
             } else {

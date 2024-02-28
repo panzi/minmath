@@ -4,15 +4,31 @@
 
 #include "tokenizer.h"
 #include "ast.h"
+#include "parser_error.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct AstNode *alt_parse_expression_from_string(const char *input);
-struct AstNode *alt_parse_expression(struct Tokenizer *tokenizer, int min_precedence);
-struct AstNode *alt_parse_increasing_precedence(struct Tokenizer *tokenizer, struct AstNode *left, int min_precedence);
-struct AstNode *alt_parse_leaf(struct Tokenizer *tokenizer);
+struct AltParser {
+    struct Tokenizer tokenizer;
+    struct ErrorInfo error;
+};
+
+#define ALT_PARSER_INIT(INPUT) {         \
+    .tokenizer = TOKENIZER_INIT(INPUT),  \
+    .error = {                           \
+        .error  = PARSER_ERROR_OK,       \
+        .offset = 0,                     \
+        .context_offset = 0,             \
+    },                                   \
+}
+
+struct AstNode *alt_parse_expression_from_string(const char *input, struct ErrorInfo *error);
+struct AstNode *alt_parse_expression(struct AltParser *parser, int min_precedence);
+struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct AstNode *left, int min_precedence);
+struct AstNode *alt_parse_leaf(struct AltParser *parser);
+void alt_parser_free(struct AltParser *parser);
 
 #ifdef __cplusplus
 }

@@ -1,5 +1,5 @@
-#ifndef MINMATH_PARSER_H__
-#define MINMATH_PARSER_H__
+#ifndef MINMATH_PARSER_ERROR_H__
+#define MINMATH_PARSER_ERROR_H__
 #pragma once
 
 #include <stddef.h>
@@ -13,6 +13,7 @@ enum ParserError {
     PARSER_ERROR_OK = 0,
     PARSER_ERROR_MEMORY,
     PARSER_ERROR_ILLEGAL_TOKEN,
+    PARSER_ERROR_EXPECTED_CLOSE_PAREN,
     PARSER_ERROR_UNEXPECTED_EOF,
 };
 

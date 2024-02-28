@@ -1,6 +1,5 @@
 #include "alt_parser.h"
 
-#include <errno.h>
 #include <assert.h>
 #include <stdbool.h>
 
@@ -18,29 +17,33 @@ static inline enum NodeType get_binary_node_type(enum TokenType token);
 // recursion level for every new operator, but this will stay at the same level.
 // This parser uses the same tokenizer as the parser above.
 
-struct AstNode *alt_parse_expression_from_string(const char *input) {
-    struct Tokenizer tokenizer = TOKENIZER_INIT(input);
-    struct AstNode *expr = alt_parse_expression(&tokenizer, 0);
-    if (expr == NULL) {
-        return NULL;
-    }
+void alt_parser_free(struct AltParser *parser) {
+    tokenizer_free(&parser->tokenizer);
+}
 
-    if (next_token(&tokenizer) != TOK_EOF) {
-        // trailing garbage
-        ast_free(expr);
-        expr = NULL;
-        if (tokenizer.token != TOK_ERROR) {
-            // otherwise next_token() has set errno
-            errno = EINVAL;
+struct AstNode *alt_parse_expression_from_string(const char *input, struct ErrorInfo *error) {
+    struct AltParser parser = ALT_PARSER_INIT(input);
+    struct AstNode *expr = alt_parse_expression(&parser, 0);
+    if (expr != NULL) {
+        if (next_token(&parser.tokenizer) != TOK_EOF) {
+            parser.error.error  = PARSER_ERROR_ILLEGAL_TOKEN;
+            parser.error.offset = parser.error.context_offset = parser.tokenizer.token_pos;
+            ast_free(expr);
+            expr = NULL;
         }
     }
-    tokenizer_free(&tokenizer);
+
+    if (parser.error.error != PARSER_ERROR_OK && error != NULL) {
+        *error = parser.error;
+    }
+
+    alt_parser_free(&parser);
     return expr;
 }
 
 
-struct AstNode *alt_parse_increasing_precedence(struct Tokenizer *tokenizer, struct AstNode *left, int min_precedence) {
-    enum TokenType token = peek_token(tokenizer);
+struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct AstNode *left, int min_precedence) {
+    enum TokenType token = peek_token(&parser->tokenizer);
 
     if (!is_binary_operation(token)) {
         return left;
@@ -54,9 +57,9 @@ struct AstNode *alt_parse_increasing_precedence(struct Tokenizer *tokenizer, str
     }
 
     // eat the peeked token
-    next_token(tokenizer);
+    next_token(&parser->tokenizer);
 
-    struct AstNode *right = alt_parse_expression(tokenizer, precedence);
+    struct AstNode *right = alt_parse_expression(parser, precedence);
     if (right == NULL) {
         ast_free(left);
         return NULL;
@@ -72,14 +75,14 @@ struct AstNode *alt_parse_increasing_precedence(struct Tokenizer *tokenizer, str
     return expr;
 }
 
-struct AstNode *alt_parse_expression(struct Tokenizer *tokenizer, int min_precedence) {
-    struct AstNode *expr = alt_parse_leaf(tokenizer);
+struct AstNode *alt_parse_expression(struct AltParser *parser, int min_precedence) {
+    struct AstNode *expr = alt_parse_leaf(parser);
     if (expr == NULL) {
         return NULL;
     }
 
     for (;;) {
-        struct AstNode *new_expr = alt_parse_increasing_precedence(tokenizer, expr, min_precedence);
+        struct AstNode *new_expr = alt_parse_increasing_precedence(parser, expr, min_precedence);
         if (new_expr == NULL) {
             return NULL;
         }
@@ -94,8 +97,8 @@ struct AstNode *alt_parse_expression(struct Tokenizer *tokenizer, int min_preced
     return expr;
 }
 
-struct AstNode *alt_parse_leaf(struct Tokenizer *tokenizer) {
-    enum TokenType token = next_token(tokenizer);
+struct AstNode *alt_parse_leaf(struct AltParser *parser) {
+    enum TokenType token = next_token(&parser->tokenizer);
     bool negate = false;
     struct AstNode *expr = NULL;
 
@@ -105,49 +108,65 @@ struct AstNode *alt_parse_leaf(struct Tokenizer *tokenizer) {
         } else if (token != TOK_PLUS) {
             break;
         }
-        token = next_token(tokenizer);
+        token = next_token(&parser->tokenizer);
     }
 
     switch (token) {
         case TOK_INT:
-            expr = ast_create_int(tokenizer->value);
+            expr = ast_create_int(parser->tokenizer.value);
             if (expr == NULL) {
+                parser->error.error  = PARSER_ERROR_MEMORY;
+                parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
                 return NULL;
             }
             break;
 
         case TOK_IDENT:
             // re-use memory allocated for tokenizer->ident
-            expr = ast_create_var(tokenizer->ident);
+            expr = ast_create_var(parser->tokenizer.ident);
             if (expr == NULL) {
+                parser->error.error  = PARSER_ERROR_MEMORY;
+                parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
                 return NULL;
             }
-            tokenizer->ident = NULL;
+            parser->tokenizer.ident = NULL;
             break;
 
         case TOK_OPEN_PAREN:
-            expr = alt_parse_expression(tokenizer, 0);
+        {
+            size_t start_offset = parser->tokenizer.token_pos;
+            expr = alt_parse_expression(parser, 0);
             if (expr == NULL) {
                 return NULL;
             }
 
-            if (next_token(tokenizer) != TOK_CLOSE_PAREN) {
-                if (tokenizer->token != TOK_ERROR) {
-                    errno = EINVAL;
+            if (next_token(&parser->tokenizer) != TOK_CLOSE_PAREN) {
+                if (!token_is_error(parser->tokenizer.token)) {
+                    parser->error.error  = PARSER_ERROR_EXPECTED_CLOSE_PAREN;
+                    parser->error.offset = parser->tokenizer.token_pos;
+                    parser->error.context_offset = start_offset;
                 }
                 ast_free(expr);
                 return NULL;
             }
             break;
+        }
+        case TOK_EOF:
+            parser->error.error  = PARSER_ERROR_UNEXPECTED_EOF;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            return NULL;
 
         default:
-            errno = EINVAL;
+            parser->error.error  = PARSER_ERROR_ILLEGAL_TOKEN;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
             return NULL;
     }
 
     if (negate) {
         struct AstNode *new_expr = ast_create_unary(NODE_NEG, expr);
         if (new_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
             ast_free(expr);
             return NULL;
         }

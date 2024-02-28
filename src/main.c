@@ -13,24 +13,26 @@ int main(int argc, char *argv[]) {
     int status = 0;
     for (int argind = 1; argind < argc; ++ argind) {
         struct AstNode *expr;
+        struct ErrorInfo error;
+        const char *source = argv[argind];
 
-        expr = parse_expression_from_string(argv[argind]);
+        expr = parse_expression_from_string(source, &error);
         if (expr != NULL) {
             int value = ast_execute(expr);
-            printf("%s = %d\n", argv[argind], value);
+            printf("%s = %d\n", source, value);
             ast_free(expr);
         } else {
-            fprintf(stderr, "%s = ERROR: %s\n", argv[argind], strerror(errno));
+            print_parser_error(stderr, source, &error, 3);
             status = 1;
         }
 
-        expr = alt_parse_expression_from_string(argv[argind]);
+        expr = alt_parse_expression_from_string(source, &error);
         if (expr != NULL) {
             int value = ast_execute(expr);
-            printf("%s = %d\n", argv[argind], value);
+            printf("%s = %d\n", source, value);
             ast_free(expr);
         } else {
-            fprintf(stderr, "%s = ERROR: %s\n", argv[argind], strerror(errno));
+            print_parser_error(stderr, source, &error, 3);
             status = 1;
         }
     }

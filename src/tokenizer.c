@@ -2,7 +2,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 void tokenizer_free(struct Tokenizer *tokenizer) {
     tokenizer->input = NULL;
@@ -12,6 +11,17 @@ void tokenizer_free(struct Tokenizer *tokenizer) {
     if (tokenizer->ident != NULL) {
         free(tokenizer->ident);
         tokenizer->ident = NULL;
+    }
+}
+
+bool token_is_error(enum TokenType token) {
+    switch (token) {
+    case TOK_ERROR_TOKEN:
+    case TOK_ERROR_MEMORY:
+        return true;
+    
+    default:
+        return false;
     }
 }
 
@@ -45,6 +55,7 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
         }
 
         if (ch == 0) {
+            tokenizer->token_pos = tokenizer->input_pos;
             return tokenizer->token = TOK_EOF;
         }
 
@@ -60,6 +71,8 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
             ch = tokenizer->input[tokenizer->input_pos];
         }
     }
+
+    tokenizer->token_pos = tokenizer->input_pos;
 
     switch (ch) {
         case '+':
@@ -102,8 +115,7 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
                 size_t len = tokenizer->input_pos - start_pos;
                 char *ident = malloc(len + 1);
                 if (ident == NULL) {
-                    // malloc sets errno
-                    return tokenizer->token = TOK_ERROR;
+                    return tokenizer->token = TOK_ERROR_MEMORY;
                 }
 
                 memcpy(ident, tokenizer->input + start_pos, len);
@@ -124,8 +136,7 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
                 tokenizer->value = value;
                 return tokenizer->token = TOK_INT;
             } else {
-                errno = EINVAL;
-                return tokenizer->token = TOK_ERROR;
+                return tokenizer->token = TOK_ERROR_TOKEN;
             }
     }
 }
