@@ -16,9 +16,17 @@ Syntax
 ### Operator Precedence
 
 1. atoms, parenthesized expressions
-2. negation (unary `-`)
+2. unary operations
 3. multiplication, division
 4. addition, subtraction
+5. ordered comparison
+6. equality comparison
+7. bitwise and
+8. bitwise xor
+9. bitwise or
+10. logical and
+11. logical or
+12. conditional expression
 
 Operations of the same precedence are performed left to right.
 
@@ -75,6 +83,8 @@ skipping any ignorable characters, like white-space and comments. The tokenizer
 has the ability to look ahead one single token without consuming it (peeking).
 The actual parser operates on these tokens.
 
+### Parser from BNF
+
 To write the parser simply write one function for each rule in the BNF that
 aren't corresponding to tokens (and thus already handled by the tokenizer).
 Where another rule is mentioned you do a recursive call to the corresponding
@@ -82,10 +92,11 @@ parser function. `{` `}` is translated to loops. The loop condition needs to
 look ahead one single token to be able to determine when to break. Most
 programming languages don't need more lookahead than one single token.
 
-That's it. Enjoy!
+### Faster and More Maintainable Parser
 
-There are other more complicated ways to write much more efficient parsers,
-but as a first step this good enough.
+However, this will yield an inefficient parser that is hard to maintain with
+a lot of redundant code. Instead you can write it like in `alt_parser.c`
+where all binary operations are done at once and operator precedence can
+be configured in `get_precedence()`.
 
-But there is also one alternative parser included in the source that is a
-tiny bit faster.
+**TODO:** Explain how it works.
