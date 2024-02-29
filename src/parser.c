@@ -48,50 +48,54 @@ struct AstNode *parse_condition(struct Parser *parser) {
         return NULL;
     }
 
-    enum TokenType token = peek_token(&parser->tokenizer);
+    for (;;) {
+        enum TokenType token = peek_token(&parser->tokenizer);
+        if (token != TOK_QUEST) {
+            break;
+        }
 
-    if (token != TOK_QUEST) {
-        return expr;
+        token = next_token(&parser->tokenizer);
+
+        size_t quest_offset = parser->tokenizer.token_pos;
+        struct AstNode *then_expr = parse_expression(parser);
+        if (then_expr == NULL) {
+            ast_free(expr);
+            return NULL;
+        }
+
+        token = next_token(&parser->tokenizer);
+
+        if (token != TOK_COLON) {
+            parser->error.error = PARSER_ERROR_EXPECTED_TOKEN;
+            parser->error.token = TOK_COLON;
+            parser->error.offset = parser->tokenizer.token_pos;
+            parser->error.context_offset = quest_offset;
+            ast_free(expr);
+            ast_free(then_expr);
+            return NULL;
+        }
+
+        struct AstNode *else_expr = parse_expression(parser);
+        if (else_expr == NULL) {
+            ast_free(expr);
+            ast_free(then_expr);
+            return NULL;
+        }
+
+        struct AstNode *if_expr = ast_create_terneary(expr, then_expr, else_expr);
+        if (if_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(expr);
+            ast_free(then_expr);
+            ast_free(else_expr);
+            return NULL;
+        }
+
+        expr = if_expr;
     }
 
-    token = next_token(&parser->tokenizer);
-
-    size_t quest_offset = parser->tokenizer.token_pos;
-    struct AstNode *then_expr = parse_or(parser);
-    if (then_expr == NULL) {
-        ast_free(expr);
-        return NULL;
-    }
-
-    token = next_token(&parser->tokenizer);
-
-    if (token != TOK_COLON) {
-        parser->error.error = PARSER_ERROR_ILLEGAL_TOKEN;
-        parser->error.offset = parser->tokenizer.token_pos;
-        parser->error.context_offset = quest_offset;
-        ast_free(expr);
-        ast_free(then_expr);
-        return NULL;
-    }
-
-    struct AstNode *else_expr = parse_or(parser);
-    if (else_expr == NULL) {
-        ast_free(expr);
-        ast_free(then_expr);
-        return NULL;
-    }
-
-    struct AstNode *if_expr = ast_create_terneary(expr, then_expr, else_expr);
-    if (if_expr == NULL) {
-        parser->error.error  = PARSER_ERROR_MEMORY;
-        parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-        ast_free(expr);
-        ast_free(then_expr);
-        ast_free(else_expr);
-        return NULL;
-    }
-
-    return if_expr;
+    return expr;
 }
 
 struct AstNode *parse_or(struct Parser *parser) {
@@ -403,8 +407,8 @@ struct AstNode *parse_product(struct Parser *parser) {
 
 struct AstNode *parse_unary(struct Parser *parser) {
     enum TokenType token = peek_token(&parser->tokenizer);
-    struct AstNode *expr = NULL;
-    struct AstNode **bottom_expr = NULL;
+    struct AstNode *top = NULL;
+    struct AstNode *parent = NULL;
 
     for (;;) {
         if (token == TOK_PLUS) {
@@ -415,11 +419,11 @@ struct AstNode *parse_unary(struct Parser *parser) {
 
         struct AstNode *child;
         if (token == TOK_MINUS) {
-            child = ast_create_unary(NODE_NEG, expr);
+            child = ast_create_unary(NODE_NEG, NULL);
         } else if (token == TOK_BIT_NEG) {
-            child = ast_create_unary(NODE_BIT_NEG, expr);
+            child = ast_create_unary(NODE_BIT_NEG, NULL);
         } else if (token == TOK_NOT) {
-            child = ast_create_unary(NODE_NOT, expr);
+            child = ast_create_unary(NODE_NOT, NULL);
         } else {
             break;
         }
@@ -427,14 +431,16 @@ struct AstNode *parse_unary(struct Parser *parser) {
         if (child == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
+            ast_free(top);
             return NULL;
         }
 
-        if (bottom_expr == NULL) {
-            bottom_expr = &child->data.child;
+        if (parent != NULL) {
+            parent->data.child = child;
+            parent = child;
+        } else {
+            top = parent = child;
         }
-        expr = child;
 
         next_token(&parser->tokenizer);
         token = peek_token(&parser->tokenizer);
@@ -442,12 +448,13 @@ struct AstNode *parse_unary(struct Parser *parser) {
 
     struct AstNode *child = parse_atom(parser);
     if (child == NULL) {
+        ast_free(top);
         return NULL;
     }
 
-    if (expr != NULL) {
-        *bottom_expr = child;
-        return expr;
+    if (parent != NULL) {
+        parent->data.child = child;
+        return top;
     }
 
     return child;
@@ -488,7 +495,8 @@ struct AstNode *parse_atom(struct Parser *parser) {
 
             if (next_token(&parser->tokenizer) != TOK_RPAREN) {
                 if (!token_is_error(parser->tokenizer.token)) {
-                    parser->error.error  = PARSER_ERROR_EXPECTED_CLOSE_PAREN;
+                    parser->error.error  = PARSER_ERROR_EXPECTED_TOKEN;
+                    parser->error.token  = TOK_RPAREN;
                     parser->error.offset = parser->tokenizer.token_pos;
                     parser->error.context_offset = start_offset;
                 }

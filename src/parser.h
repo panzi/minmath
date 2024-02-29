@@ -21,6 +21,7 @@ struct Parser {
         .error  = PARSER_ERROR_OK,       \
         .offset = 0,                     \
         .context_offset = 0,             \
+        .token  = TOK_EOF,               \
     },                                   \
 }
 

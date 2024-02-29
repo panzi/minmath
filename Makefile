@@ -9,16 +9,20 @@ OBJ = $(SHARED_OBJ) \
 TEST_OBJ = $(SHARED_OBJ) \
            build/testdata.o \
            build/test.o
+ALL_OBJ = $(TEST_OBJ) \
+          build/main.o
 BIN = build/minmath
 TEST_BIN = build/minmath_test
-CFLAGS = -Wall -Werror -std=gnu11 -O2
+CFLAGS = -Wall -Werror -std=gnu11
 TESTDATA_CFLAGS = $(CFLAGS) -Wno-overflow -Wno-parentheses -Wno-logical-not-parentheses -Wno-bool-operation -Wno-div-by-zero
 RELEASE = 0
 
 ifeq ($(RELEASE),1)
-CFLAGS += -DNDEBUG
+      CFLAGS += -O3 -DNDEBUG
+      TESTDATA_CFLAGS += -O3 -DNDEBUG
 else
-CFLAGS += -g
+      CFLAGS += -g
+      TESTDATA_CFLAGS += -g
 endif
 
 .PHONY: all clean test
@@ -41,4 +45,4 @@ $(TEST_BIN): $(TEST_OBJ)
 	$(CC) $(CFLAGS) $(TEST_OBJ) -o $@
 
 clean:
-	rm -rv $(OBJ) $(TEST_OBJ) $(BIN) $(TEST_BIN) perf.data perf.data.old
+	rm -rv $(ALL_OBJ) $(BIN) $(TEST_BIN) perf.data perf.data.old

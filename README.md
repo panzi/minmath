@@ -47,7 +47,7 @@ This is really all you need, no more head scratching than that.
 
 ```BNF
 EXPRESSION := CONDITION
-CONDITION  := OR ["?" OR ":" OR]
+CONDITION  := OR {"?" EXPRESSION ":" EXPRESSION}
 OR         := AND {"||" AND}
 AND        := COMPARE {"&&" COMPARE}
 BIT_OR     := BIT_XOR {"|" BIT_XOR}

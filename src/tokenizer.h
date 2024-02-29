@@ -65,6 +65,7 @@ enum TokenType peek_token(struct Tokenizer *tokenizer);
 enum TokenType next_token(struct Tokenizer *tokenizer);
 bool token_is_error(enum TokenType token);
 void tokenizer_free(struct Tokenizer *tokenizer);
+const char *get_token_name(enum TokenType token);
 
 #ifdef __cplusplus
 }

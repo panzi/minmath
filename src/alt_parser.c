@@ -138,8 +138,8 @@ struct AstNode *alt_parse_expression(struct AltParser *parser, int min_precedenc
 
 struct AstNode *alt_parse_leaf(struct AltParser *parser) {
     enum TokenType token = next_token(&parser->tokenizer);
-    struct AstNode *expr = NULL;
-    struct AstNode **bottom_expr = NULL;
+    struct AstNode *top = NULL;
+    struct AstNode *parent = NULL;
 
     for (;;) {
         if (token == TOK_PLUS) {
@@ -149,11 +149,11 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
 
         struct AstNode *child;
         if (token == TOK_MINUS) {
-            child = ast_create_unary(NODE_NEG, expr);
+            child = ast_create_unary(NODE_NEG, NULL);
         } else if (token == TOK_BIT_NEG) {
-            child = ast_create_unary(NODE_BIT_NEG, expr);
+            child = ast_create_unary(NODE_BIT_NEG, NULL);
         } else if (token == TOK_NOT) {
-            child = ast_create_unary(NODE_NOT, expr);
+            child = ast_create_unary(NODE_NOT, NULL);
         } else {
             break;
         }
@@ -161,14 +161,16 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
         if (child == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
+            ast_free(top);
             return NULL;
         }
 
-        if (bottom_expr == NULL) {
-            bottom_expr = &child->data.child;
+        if (parent != NULL) {
+            parent->data.child = child;
+            parent = child;
+        } else {
+            top = parent = child;
         }
-        expr = child;
 
         token = next_token(&parser->tokenizer);
     }
@@ -178,7 +180,7 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
         case TOK_INT:
             child = ast_create_int(parser->tokenizer.value);
             if (child == NULL) {
-                ast_free(expr);
+                ast_free(top);
                 parser->error.error  = PARSER_ERROR_MEMORY;
                 parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
                 return NULL;
@@ -189,7 +191,7 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
             // re-use memory allocated for tokenizer->ident
             child = ast_create_var(parser->tokenizer.ident);
             if (child == NULL) {
-                ast_free(expr);
+                ast_free(top);
                 parser->error.error  = PARSER_ERROR_MEMORY;
                 parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
                 return NULL;
@@ -202,18 +204,19 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
             size_t start_offset = parser->tokenizer.token_pos;
             child = alt_parse_expression(parser, 0);
             if (child == NULL) {
-                ast_free(expr);
+                ast_free(top);
                 return NULL;
             }
 
             if (next_token(&parser->tokenizer) != TOK_RPAREN) {
                 if (!token_is_error(parser->tokenizer.token)) {
-                    parser->error.error  = PARSER_ERROR_EXPECTED_CLOSE_PAREN;
+                    parser->error.error  = PARSER_ERROR_EXPECTED_TOKEN;
+                    parser->error.token  = TOK_RPAREN;
                     parser->error.offset = parser->tokenizer.token_pos;
                     parser->error.context_offset = start_offset;
                 }
                 ast_free(child);
-                ast_free(expr);
+                ast_free(top);
                 return NULL;
             }
             break;
@@ -229,9 +232,9 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
             return NULL;
     }
 
-    if (expr != NULL) {
-        *bottom_expr = child;
-        return expr;
+    if (parent != NULL) {
+        parent->data.child = child;
+        return top;
     }
 
     return child;

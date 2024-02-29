@@ -167,6 +167,8 @@ void ast_free(struct AstNode *node) {
 // ========================================================================== //
 
 int ast_execute(struct AstNode *expr) {
+    assert(expr != NULL);
+
     switch (expr->type) {
         case NODE_ADD:
             return (

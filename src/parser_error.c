@@ -28,8 +28,8 @@ enum ParserError get_error_code(const char *error_name) {
         return PARSER_ERROR_UNEXPECTED_EOF;
     }
 
-    if (strcmp(error_name, "EXPECTED_CLOSE_PAREN") == 0) {
-        return PARSER_ERROR_EXPECTED_CLOSE_PAREN;
+    if (strcmp(error_name, "EXPECTED_TOKEN") == 0) {
+        return PARSER_ERROR_EXPECTED_TOKEN;
     }
 
     return -1;
@@ -58,26 +58,32 @@ struct SourceLocation get_source_location(const char *source, size_t offset) {
     };
 }
 
-const char *get_error_message(enum ParserError error) {
-    switch (error) {
+void print_error_message(FILE *stream, const struct ErrorInfo *error) {
+    switch (error->error) {
         case PARSER_ERROR_OK:
-            return "Ok";
+            fprintf(stream, "OK");
+            break;
 
         case PARSER_ERROR_MEMORY:
-            return "Error allocating memory";
+            fprintf(stream, "Error allocating memory");
+            break;
 
         case PARSER_ERROR_ILLEGAL_TOKEN:
-            return "Illegal token";
+            fprintf(stream, "Illegal token");
+            break;
 
         case PARSER_ERROR_UNEXPECTED_EOF:
-            return "Unexpected end of file";
+            fprintf(stream, "Unexpected end of file");
+            break;
 
-        case PARSER_ERROR_EXPECTED_CLOSE_PAREN:
-            return "Expected ')'";
+        case PARSER_ERROR_EXPECTED_TOKEN:
+            fprintf(stream, "Expected %s", get_token_name(error->token));
+            break;
 
         default:
             assert(false);
-            return "Invalid error code";
+            fprintf(stream, "Invalid error code: %d", error->error);
+            break;
     }
 }
 
@@ -171,12 +177,18 @@ void print_source_location_intern(FILE *stream, const char *source, size_t offse
 void print_parser_error(FILE *stream, const char *source, const struct ErrorInfo *error, size_t context_lines) {
     struct SourceLocation loc = get_source_location(source, error->offset);
 
-    fprintf(stderr, "On line %zu at column %zu: %s\n", loc.lineno, loc.column, get_error_message(error->error));
+    fprintf(stderr, "On line %zu at column %zu: ", loc.lineno, loc.column);
+    print_error_message(stderr, error);
+    fputc('\n', stderr);
 
     print_source_location_intern(stream, source, error->offset, loc, context_lines);
 
     if (error->offset != error->context_offset) {
-        fprintf(stderr, "See other location:\n");
+        if (error->error == PARSER_ERROR_EXPECTED_TOKEN && error->token == TOK_RPAREN) {
+            fprintf(stderr, "( was here:\n");
+        } else {
+            fprintf(stderr, "See other location:\n");
+        }
 
         print_source_location(stream, source, error->context_offset, context_lines);
     }

@@ -265,4 +265,6 @@ const struct TestCase TESTS[] = {''')
     for _ in range(1024):
         test = gen_testcase()
         print(f'    {test},')
-    print('};')
+    print('''\
+    { NULL, false, NULL, -1 },
+};''')
