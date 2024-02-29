@@ -3,6 +3,9 @@
 #include <assert.h>
 #include <stdbool.h>
 
+static struct AstNode *alt_parse_expression(struct AltParser *parser, int min_precedence);
+static struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct AstNode *left, int min_precedence);
+static struct AstNode *alt_parse_leaf(struct AltParser *parser);
 static inline int get_precedence(enum NodeType type);
 static inline bool is_binary_operation(enum TokenType token);
 static inline enum NodeType get_binary_node_type(enum TokenType token);

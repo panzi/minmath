@@ -2,6 +2,9 @@
 #define MINMATH_AST_H__
 #pragma once
 
+#include <stdio.h>
+#include <stdbool.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -54,6 +57,9 @@ struct AstNode *ast_create_binary(enum NodeType type, struct AstNode *lhs, struc
 struct AstNode *ast_create_unary(enum NodeType type, struct AstNode *child);
 struct AstNode *ast_create_int(int value);
 struct AstNode *ast_create_var(char *name);
+bool ast_is_binary(const struct AstNode *expr);
+bool ast_is_unary(const struct AstNode *expr);
+void ast_print(FILE *stream, const struct AstNode *expr);
 void ast_free(struct AstNode *node);
 int ast_execute(struct AstNode *expr);
 

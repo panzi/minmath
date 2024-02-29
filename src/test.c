@@ -1,9 +1,12 @@
 #include "testdata.h"
 #include "parser.h"
 #include "alt_parser.h"
+#include "optimizer.h"
 
-#include <assert.h>
 #include <stdio.h>
+#include <string.h>
+#include <errno.h>
+#include <assert.h>
 #include <time.h>
 #include <sys/time.h>
 
@@ -57,9 +60,39 @@ int main(int argc, char *argv[]) {
                     for (char **ptr = test->environ; *ptr; ++ ptr) {
                         fprintf(stderr, "    %s\n", *ptr);
                     }
-                    fprintf(stderr, "Expression:\n    %s\nResult:\n    %d\nExpected:\n    %d\n\n", test->expr, result, test->result);
+                    fprintf(stderr,
+                        "Expression:\n    %s\nResult:\n    %d\nExpected:\n    %d\n\n",
+                        test->expr, result, test->result);
 
                     ++ error_count;
+                }
+
+                struct AstNode *opt_expr = ast_optimize(expr);
+                if (opt_expr == NULL) {
+                    fprintf(stderr,
+                        "*** [%s] Error optimizing expression \"%s\": %s\n",
+                        func->name, test->expr, strerror(errno));
+                    ++ error_count;
+                } else {
+                    environ = test->environ;
+                    int result = ast_execute(opt_expr);
+                    environ = environ_bakup;
+                    if (result != test->result) {
+                        fprintf(stderr, "*** [%s] Optimized result missmatch:\nEnvironment:\n", func->name);
+                        for (char **ptr = test->environ; *ptr; ++ ptr) {
+                            fprintf(stderr, "    %s\n", *ptr);
+                        }
+                        fprintf(stderr,
+                            "Expression:\n    %s\nOptimized Expression:\n    ",
+                            test->expr);
+                        ast_print(stderr, opt_expr);
+                        fprintf(stderr,
+                            "\nResult:\n    %d\nExpected:\n    %d\n\n",
+                            result, test->result);
+
+                        ++ error_count;
+                    }
+                    ast_free(opt_expr);
                 }
 
                 ast_free(expr);

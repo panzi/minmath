@@ -26,9 +26,6 @@ struct AltParser {
 }
 
 struct AstNode *alt_parse_expression_from_string(const char *input, struct ErrorInfo *error);
-struct AstNode *alt_parse_expression(struct AltParser *parser, int min_precedence);
-struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct AstNode *left, int min_precedence);
-struct AstNode *alt_parse_leaf(struct AltParser *parser);
 void alt_parser_free(struct AltParser *parser);
 
 #ifdef __cplusplus

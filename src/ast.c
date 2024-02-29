@@ -6,6 +6,43 @@
 
 #define AST_MALLOC() malloc(sizeof(struct AstNode))
 
+bool ast_is_binary(const struct AstNode *expr) {
+    switch (expr->type) {
+        case NODE_ADD:
+        case NODE_SUB:
+        case NODE_MUL:
+        case NODE_DIV:
+        case NODE_MOD:
+        case NODE_AND:
+        case NODE_OR:
+        case NODE_LT:
+        case NODE_GT:
+        case NODE_LE:
+        case NODE_GE:
+        case NODE_EQ:
+        case NODE_NE:
+        case NODE_BIT_AND:
+        case NODE_BIT_OR:
+        case NODE_BIT_XOR:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
+bool ast_is_unary(const struct AstNode *expr) {
+    switch (expr->type) {
+        case NODE_NEG:
+        case NODE_BIT_NEG:
+        case NODE_NOT:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
 struct AstNode *ast_create_terneary(struct AstNode *cond, struct AstNode *then_expr, struct AstNode *else_expr) {
     struct AstNode *node = AST_MALLOC();
     if (node == NULL) {
@@ -157,6 +194,120 @@ void ast_free(struct AstNode *node) {
                 break;
         }
         free(node);
+    }
+}
+
+void ast_print(FILE *stream, const struct AstNode *expr) {
+    if (ast_is_binary(expr)) {
+        fputc('(', stream);
+        ast_print(stream, expr->data.binary.lhs);
+        switch (expr->type) {
+            case NODE_ADD:
+                fprintf(stream, " + ");
+                break;
+
+            case NODE_SUB:
+                fprintf(stream, " - ");
+                break;
+
+            case NODE_MUL:
+                fprintf(stream, " * ");
+                break;
+
+            case NODE_DIV:
+                fprintf(stream, " / ");
+                break;
+
+            case NODE_MOD:
+                fprintf(stream, " %% ");
+                break;
+
+            case NODE_AND:
+                fprintf(stream, " && ");
+                break;
+
+            case NODE_OR:
+                fprintf(stream, " || ");
+                break;
+
+            case NODE_LT:
+                fprintf(stream, " < ");
+                break;
+
+            case NODE_GT:
+                fprintf(stream, " > ");
+                break;
+
+            case NODE_LE:
+                fprintf(stream, " <= ");
+                break;
+
+            case NODE_GE:
+                fprintf(stream, " >= ");
+                break;
+
+            case NODE_EQ:
+                fprintf(stream, " == ");
+                break;
+
+            case NODE_NE:
+                fprintf(stream, " != ");
+                break;
+
+            case NODE_BIT_AND:
+                fprintf(stream, " & ");
+                break;
+
+            case NODE_BIT_OR:
+                fprintf(stream, " | ");
+                break;
+
+            case NODE_BIT_XOR:
+                fprintf(stream, " ^ ");
+                break;
+
+            default:
+                assert(false);
+                fprintf(stream, " <?> ");
+                break;
+        }
+
+        ast_print(stream, expr->data.binary.rhs);
+        fputc(')', stream);
+    } else if (expr->type == NODE_IF) {
+        fputc('(', stream);
+        ast_print(stream, expr->data.terneary.cond);
+        fprintf(stream, " ? ");
+        ast_print(stream, expr->data.terneary.then_expr);
+        fprintf(stream, " : ");
+        ast_print(stream, expr->data.terneary.else_expr);
+        fputc(')', stream);
+    } else if (ast_is_unary(expr)) {
+        switch (expr->type) {
+            case NODE_NEG:
+                fprintf(stream, "- ");
+                break;
+
+            case NODE_BIT_NEG:
+                fputc('~', stream);
+                break;
+
+            case NODE_NOT:
+                fputc('!', stream);
+                break;
+
+            default:
+                assert(false);
+                fprintf(stream, "<?> ");
+                break;
+        }
+        ast_print(stream, expr->data.child);
+    } else if (expr->type == NODE_INT) {
+        fprintf(stream, "%d", expr->data.value);
+    } else if (expr->type == NODE_VAR) {
+        fprintf(stream, "%s", expr->data.ident);
+    } else {
+        assert(false);
     }
 }
 
