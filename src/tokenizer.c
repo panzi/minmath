@@ -118,7 +118,7 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
 
         case '|':
             tokenizer->input_pos ++;
-            if (tokenizer->input[tokenizer->input_pos] == '&') {
+            if (tokenizer->input[tokenizer->input_pos] == '|') {
                 tokenizer->input_pos ++;
                 return TOK_OR;
             }

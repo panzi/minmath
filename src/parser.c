@@ -4,6 +4,7 @@ static struct AstNode *parse_condition(struct Parser *parser);
 static struct AstNode *parse_or(struct Parser *parser);
 static struct AstNode *parse_and(struct Parser *parser);
 static struct AstNode *parse_compare(struct Parser *parser);
+static struct AstNode *parse_order(struct Parser *parser);
 static struct AstNode *parse_bit_or(struct Parser *parser);
 static struct AstNode *parse_bit_xor(struct Parser *parser);
 static struct AstNode *parse_bit_and(struct Parser *parser);
@@ -94,27 +95,237 @@ struct AstNode *parse_condition(struct Parser *parser) {
 }
 
 struct AstNode *parse_or(struct Parser *parser) {
-    // TODO
+    struct AstNode *expr = parse_and(parser);
+    if (expr == NULL) {
+        return NULL;
+    }
+
+    for (;;) {
+        enum TokenType token = peek_token(&parser->tokenizer);
+        if (token != TOK_OR) {
+            break;
+        }
+
+        token = next_token(&parser->tokenizer);
+        struct AstNode *rhs = parse_and(parser);
+        if (rhs == NULL) {
+            ast_free(expr);
+            return NULL;
+        }
+
+        struct AstNode *new_expr = ast_create_binary(NODE_OR, expr, rhs);
+        if (new_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(expr);
+            ast_free(rhs);
+            return NULL;
+        }
+        expr = new_expr;
+    }
+    return expr;
 }
 
 struct AstNode *parse_and(struct Parser *parser) {
-    // TODO
-}
+    struct AstNode *expr = parse_bit_or(parser);
+    if (expr == NULL) {
+        return NULL;
+    }
 
-struct AstNode *parse_compare(struct Parser *parser) {
-    // TODO
+    for (;;) {
+        enum TokenType token = peek_token(&parser->tokenizer);
+        if (token != TOK_AND) {
+            break;
+        }
+
+        token = next_token(&parser->tokenizer);
+        struct AstNode *rhs = parse_bit_or(parser);
+        if (rhs == NULL) {
+            ast_free(expr);
+            return NULL;
+        }
+
+        struct AstNode *new_expr = ast_create_binary(NODE_AND, expr, rhs);
+        if (new_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(expr);
+            ast_free(rhs);
+            return NULL;
+        }
+        expr = new_expr;
+    }
+    return expr;
 }
 
 struct AstNode *parse_bit_or(struct Parser *parser) {
-    // TODO
+    struct AstNode *expr = parse_bit_xor(parser);
+    if (expr == NULL) {
+        return NULL;
+    }
+
+    for (;;) {
+        enum TokenType token = peek_token(&parser->tokenizer);
+        if (token != TOK_BIT_OR) {
+            break;
+        }
+
+        token = next_token(&parser->tokenizer);
+        struct AstNode *rhs = parse_bit_xor(parser);
+        if (rhs == NULL) {
+            ast_free(expr);
+            return NULL;
+        }
+
+        struct AstNode *new_expr = ast_create_binary(NODE_BIT_OR, expr, rhs);
+        if (new_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(expr);
+            ast_free(rhs);
+            return NULL;
+        }
+        expr = new_expr;
+    }
+    return expr;
 }
 
 struct AstNode *parse_bit_xor(struct Parser *parser) {
-    // TODO
+    struct AstNode *expr = parse_bit_and(parser);
+    if (expr == NULL) {
+        return NULL;
+    }
+
+    for (;;) {
+        enum TokenType token = peek_token(&parser->tokenizer);
+        if (token != TOK_BIT_XOR) {
+            break;
+        }
+
+        token = next_token(&parser->tokenizer);
+        struct AstNode *rhs = parse_bit_and(parser);
+        if (rhs == NULL) {
+            ast_free(expr);
+            return NULL;
+        }
+
+        struct AstNode *new_expr = ast_create_binary(NODE_BIT_XOR, expr, rhs);
+        if (new_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(expr);
+            ast_free(rhs);
+            return NULL;
+        }
+        expr = new_expr;
+    }
+    return expr;
 }
 
 struct AstNode *parse_bit_and(struct Parser *parser) {
-    // TODO
+    struct AstNode *expr = parse_compare(parser);
+    if (expr == NULL) {
+        return NULL;
+    }
+
+    for (;;) {
+        enum TokenType token = peek_token(&parser->tokenizer);
+        if (token != TOK_BIT_AND) {
+            break;
+        }
+
+        token = next_token(&parser->tokenizer);
+        struct AstNode *rhs = parse_compare(parser);
+        if (rhs == NULL) {
+            ast_free(expr);
+            return NULL;
+        }
+
+        struct AstNode *new_expr = ast_create_binary(NODE_BIT_AND, expr, rhs);
+        if (new_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(expr);
+            ast_free(rhs);
+            return NULL;
+        }
+        expr = new_expr;
+    }
+    return expr;
+}
+
+struct AstNode *parse_compare(struct Parser *parser) {
+    struct AstNode *expr = parse_order(parser);
+    if (expr == NULL) {
+        return NULL;
+    }
+
+    for (;;) {
+        enum TokenType token = peek_token(&parser->tokenizer);
+        enum NodeType node_type;
+        switch (token) {
+            case TOK_EQ: node_type = NODE_EQ; break;
+            case TOK_NE: node_type = NODE_NE; break;
+            default:
+                return expr;
+        }
+
+        token = next_token(&parser->tokenizer);
+        struct AstNode *rhs = parse_order(parser);
+        if (rhs == NULL) {
+            ast_free(expr);
+            return NULL;
+        }
+
+        struct AstNode *new_expr = ast_create_binary(node_type, expr, rhs);
+        if (new_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(expr);
+            ast_free(rhs);
+            return NULL;
+        }
+        expr = new_expr;
+    }
+    return expr;
+}
+
+struct AstNode *parse_order(struct Parser *parser) {
+    struct AstNode *expr = parse_sum(parser);
+    if (expr == NULL) {
+        return NULL;
+    }
+
+    for (;;) {
+        enum TokenType token = peek_token(&parser->tokenizer);
+        enum NodeType node_type;
+        switch (token) {
+            case TOK_LT: node_type = NODE_LT; break;
+            case TOK_GT: node_type = NODE_GT; break;
+            case TOK_LE: node_type = NODE_LE; break;
+            case TOK_GE: node_type = NODE_GE; break;
+            default:
+                return expr;
+        }
+
+        token = next_token(&parser->tokenizer);
+        struct AstNode *rhs = parse_sum(parser);
+        if (rhs == NULL) {
+            ast_free(expr);
+            return NULL;
+        }
+
+        struct AstNode *new_expr = ast_create_binary(node_type, expr, rhs);
+        if (new_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(expr);
+            ast_free(rhs);
+            return NULL;
+        }
+        expr = new_expr;
+    }
+    return expr;
 }
 
 struct AstNode *parse_sum(struct Parser *parser) {
@@ -125,8 +336,12 @@ struct AstNode *parse_sum(struct Parser *parser) {
 
     for (;;) {
         enum TokenType token = peek_token(&parser->tokenizer);
-        if (token != TOK_PLUS && token != TOK_MINUS) {
-            break;
+        enum NodeType node_type;
+        switch (token) {
+            case TOK_PLUS:  node_type = NODE_ADD; break;
+            case TOK_MINUS: node_type = NODE_SUB; break;
+            default:
+                return expr;
         }
 
         token = next_token(&parser->tokenizer);
@@ -136,7 +351,7 @@ struct AstNode *parse_sum(struct Parser *parser) {
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(token == TOK_PLUS ? NODE_ADD : NODE_SUB, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(node_type, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
@@ -157,8 +372,13 @@ struct AstNode *parse_product(struct Parser *parser) {
 
     for (;;) {
         enum TokenType token = peek_token(&parser->tokenizer);
-        if (token != TOK_MUL && token != TOK_DIV) {
-            break;
+        enum NodeType node_type;
+        switch (token) {
+            case TOK_MUL: node_type = NODE_MUL; break;
+            case TOK_DIV: node_type = NODE_DIV; break;
+            case TOK_MOD: node_type = NODE_MOD; break;
+            default:
+                return expr;
         }
 
         token = next_token(&parser->tokenizer);
@@ -168,7 +388,7 @@ struct AstNode *parse_product(struct Parser *parser) {
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(token == TOK_MUL ? NODE_MUL : NODE_DIV, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(node_type, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
@@ -182,35 +402,55 @@ struct AstNode *parse_product(struct Parser *parser) {
 }
 
 struct AstNode *parse_unary(struct Parser *parser) {
-    size_t neg_count = 0;
+    enum TokenType token = peek_token(&parser->tokenizer);
+    struct AstNode *expr = NULL;
+    struct AstNode **bottom_expr = NULL;
 
     for (;;) {
-        enum TokenType token = peek_token(&parser->tokenizer);
+        if (token == TOK_PLUS) {
+            next_token(&parser->tokenizer);
+            token = peek_token(&parser->tokenizer);
+            continue;
+        }
+
+        struct AstNode *child;
         if (token == TOK_MINUS) {
-            ++ neg_count;
-        } else if (token != TOK_PLUS) {
+            child = ast_create_unary(NODE_NEG, expr);
+        } else if (token == TOK_BIT_NEG) {
+            child = ast_create_unary(NODE_BIT_NEG, expr);
+        } else if (token == TOK_NOT) {
+            child = ast_create_unary(NODE_NOT, expr);
+        } else {
             break;
         }
-        next_token(&parser->tokenizer);
-    }
 
-    struct AstNode *expr = parse_atom(parser);
-    if (expr == NULL) {
-        return NULL;
-    }
-
-    if (neg_count % 2 == 1) {
-        struct AstNode *new_expr = ast_create_unary(NODE_NEG, expr);
-        if (new_expr == NULL) {
+        if (child == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
             ast_free(expr);
             return NULL;
         }
-        expr = new_expr;
+
+        if (bottom_expr == NULL) {
+            bottom_expr = &child->data.child;
+        }
+        expr = child;
+
+        next_token(&parser->tokenizer);
+        token = peek_token(&parser->tokenizer);
     }
 
-    return expr;
+    struct AstNode *child = parse_atom(parser);
+    if (child == NULL) {
+        return NULL;
+    }
+
+    if (expr != NULL) {
+        *bottom_expr = child;
+        return expr;
+    }
+
+    return child;
 }
 
 struct AstNode *parse_atom(struct Parser *parser) {

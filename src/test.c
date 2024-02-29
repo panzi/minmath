@@ -48,6 +48,7 @@ int main(int argc, char *argv[]) {
 
                 char **environ_bakup = environ;
                 environ = test->environ;
+                // fprintf(stderr, ">>> %s\n", test->expr);
                 int result = ast_execute(expr);
                 environ = environ_bakup;
 

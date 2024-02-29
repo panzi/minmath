@@ -24,12 +24,13 @@ Operations of the same precedence are performed left to right.
 
 ### Tokens
 
-- `+`
-- `-`
-- `*`
-- `/`
-- `(`
-- `)`
+- `+`, `-`, `*`, `/`, `%`
+- `&`, `|`, `^`, `~`
+- `&&`, `||`, `!`
+- `==`, `!=`
+- `<`, `>`, `<=`, `>=`
+- `(`, `)`,
+- `?`, `:`
 - integers
 - variable identifiers
 
@@ -49,10 +50,11 @@ EXPRESSION := CONDITION
 CONDITION  := OR ["?" OR ":" OR]
 OR         := AND {"||" AND}
 AND        := COMPARE {"&&" COMPARE}
-COMPARE    := BIT_OR {("<" | ">" | "<=" | ">=" | "==" | "!=") BIT_OR}
 BIT_OR     := BIT_XOR {"|" BIT_XOR}
 BIT_XOR    := BIT_AND {"^" BIT_AND}
-BIT_AND    := SUM {"&" SUM}
+BIT_AND    := COMPARE {"&" COMPARE}
+COMPARE    := ORDER {("==" | "!=") ORDER}
+ORDER      := SUM {("<" | ">" | "<=" | ">=") SUM}
 SUM        := PRODUCT {("+" | "-") PRODUCT}
 PRODUCT    := UNARY {("*" | "/" | "%") UNARY}
 UNARY      := {"+" | "-" | "~" | "!"} ATOM

@@ -254,6 +254,15 @@ def gen_testcase():
         )
 
 if __name__ == '__main__':
+    print('''\
+#include "testdata.h"
+
+#include <stddef.h>
+
+// These are some randomly generated tests.
+
+const struct TestCase TESTS[] = {''')
     for _ in range(1024):
         test = gen_testcase()
         print(f'    {test},')
+    print('};')

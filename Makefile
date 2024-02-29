@@ -11,7 +11,8 @@ TEST_OBJ = $(SHARED_OBJ) \
            build/test.o
 BIN = build/minmath
 TEST_BIN = build/minmath_test
-CFLAGS = -Wall -Werror -std=gnu11 -O2 -Wno-overflow
+CFLAGS = -Wall -Werror -std=gnu11 -O2
+TESTDATA_CFLAGS = $(CFLAGS) -Wno-overflow -Wno-parentheses -Wno-logical-not-parentheses -Wno-bool-operation -Wno-div-by-zero
 RELEASE = 0
 
 ifeq ($(RELEASE),1)
@@ -26,6 +27,9 @@ all: $(BIN)
 
 test: $(TEST_BIN)
 	$(TEST_BIN)
+
+build/testdata.o: src/testdata.c
+	$(CC) $(TESTDATA_CFLAGS) $< -c -o $@
 
 build/%.o: src/%.c
 	$(CC) $(CFLAGS) $< -c -o $@

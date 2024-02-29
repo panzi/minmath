@@ -140,7 +140,6 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
     enum TokenType token = next_token(&parser->tokenizer);
     struct AstNode *expr = NULL;
     struct AstNode **bottom_expr = NULL;
-    struct AstNode *child = NULL;
 
     for (;;) {
         if (token == TOK_PLUS) {
@@ -166,14 +165,15 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
             return NULL;
         }
 
-        if (expr == NULL) {
-            bottom_expr = &child;
+        if (bottom_expr == NULL) {
+            bottom_expr = &child->data.child;
         }
         expr = child;
 
         token = next_token(&parser->tokenizer);
     }
 
+    struct AstNode *child = NULL;
     switch (token) {
         case TOK_INT:
             child = ast_create_int(parser->tokenizer.value);
@@ -271,42 +271,44 @@ int get_precedence(enum NodeType type) {
             return 2;
 
         case NODE_AND:
-            return 2;
-
-        case NODE_LT:
-        case NODE_GT:
-        case NODE_LE:
-        case NODE_GE:
-        case NODE_EQ:
-        case NODE_NE:
             return 3;
 
         case NODE_BIT_OR:
             return 4;
 
         case NODE_BIT_XOR:
-            return 4;
+            return 5;
 
         case NODE_BIT_AND:
-            return 5;
+            return 6;
+
+        case NODE_EQ:
+        case NODE_NE:
+            return 7;
+
+        case NODE_LT:
+        case NODE_GT:
+        case NODE_LE:
+        case NODE_GE:
+            return 8;
 
         case NODE_ADD:
         case NODE_SUB:
-            return 6;
+            return 9;
 
         case NODE_MUL:
         case NODE_DIV:
         case NODE_MOD:
-            return 7;
+            return 10;
 
         case NODE_NEG:
         case NODE_BIT_NEG:
         case NODE_NOT:
-            return 8;
+            return 11;
 
         case NODE_VAR:
         case NODE_INT:
-            return 9;
+            return 12;
 
         default:
             assert(false);
