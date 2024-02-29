@@ -6,6 +6,7 @@
 
 #include "optimizer.h"
 
+// This optimizer just does simple constant folding.
 struct AstNode *ast_optimize(const struct AstNode *expr) {
     assert(expr != NULL);
 
