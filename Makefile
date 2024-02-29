@@ -14,16 +14,15 @@ ALL_OBJ = $(TEST_OBJ) \
 BIN = build/minmath
 TEST_BIN = build/minmath_test
 CFLAGS = -Wall -Werror -std=gnu11
-TESTDATA_CFLAGS = $(CFLAGS) -Wno-overflow -Wno-parentheses -Wno-logical-not-parentheses -Wno-bool-operation -Wno-div-by-zero
 RELEASE = 0
 
 ifeq ($(RELEASE),1)
       CFLAGS += -O3 -DNDEBUG
-      TESTDATA_CFLAGS += -O3 -DNDEBUG
 else
       CFLAGS += -g
-      TESTDATA_CFLAGS += -g
 endif
+
+TESTDATA_CFLAGS = $(CFLAGS) -Wno-overflow -Wno-parentheses -Wno-logical-not-parentheses -Wno-bool-operation -Wno-div-by-zero
 
 .PHONY: all clean test
 
