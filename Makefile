@@ -4,7 +4,8 @@ SHARED_OBJ = build/alt_parser.o \
              build/parser.o \
              build/tokenizer.o \
              build/parser_error.o \
-             build/optimizer.o
+             build/optimizer.o \
+             build/bytecode.o
 OBJ = $(SHARED_OBJ) \
       build/main.o
 TEST_OBJ = $(SHARED_OBJ) \

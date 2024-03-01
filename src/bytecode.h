@@ -1,0 +1,76 @@
+#ifndef MINMATH_BYTECODE_H__
+#define MINMATH_BYTECODE_H__
+#pragma once
+
+#include "ast.h"
+
+#include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+enum Instr {
+    INSTR_INT,
+    INSTR_VAR,
+    INSTR_ADD,
+    INSTR_SUB,
+    INSTR_MUL,
+    INSTR_DIV,
+    INSTR_MOD,
+    INSTR_BIT_AND,
+    INSTR_BIT_XOR,
+    INSTR_BIT_OR,
+    INSTR_LT,
+    INSTR_LE,
+    INSTR_GT,
+    INSTR_GE,
+    INSTR_EQ,
+    INSTR_NE,
+    INSTR_NEG,
+    INSTR_BIT_NEG,
+    INSTR_NOT,
+    INSTR_JMP,
+    INSTR_JEZ, // jump if current value equals zero
+    INSTR_JNZ, // jump if current value doesn't equal zero
+    INSTR_JNP, // jump if current value equals zero and pop current value
+    INSTR_RET,
+};
+
+struct Bytecode {
+    uint8_t *instrs;
+    uint32_t instrs_size;
+    uint32_t instrs_capacity;
+
+    char **params;
+    uint32_t params_size;
+    uint32_t params_capacity;
+};
+
+#define BYTECODE_INIT() {  \
+    .instrs = NULL,        \
+    .instrs_size = 0,      \
+    .instrs_capacity = 0,  \
+    .params = NULL,        \
+    .params_size = 0,      \
+    .params_capacity = 0,  \
+}
+
+struct Bytecode bytecode_compile(const struct AstNode *expr);
+bool bytecode_is_ok(const struct Bytecode *bytecode);
+bool bytecode_optimize(struct Bytecode *bytecode);
+int  bytecode_execute(const struct Bytecode *bytecode, const int *params);
+void bytecode_free(struct Bytecode *bytecode);
+int32_t bytecode_get_param_index(const struct Bytecode *bytecode, const char *name);
+bool bytecode_set_param(const struct Bytecode *bytecode, int *params, const char *name, int value);
+
+#define BYTECODE_IS_OK(BYTECODE) ((BYTECODE)->instrs != NULL)
+#define bytecode_is_ok(BYTECODE) BYTECODE_IS_OK(BYTECODE)
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
