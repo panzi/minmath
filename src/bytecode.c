@@ -389,6 +389,10 @@ void bytecode_free(struct Bytecode *bytecode) {
     bytecode->params_capacity = 0;
 }
 
+int *bytecode_alloc_params(const struct Bytecode *bytecode) {
+    return calloc(bytecode->params_size, sizeof(int));
+}
+
 int32_t bytecode_get_param_index(const struct Bytecode *bytecode, const char *name) {
     for (int32_t index = 0; index < bytecode->params_size; ++ index) {
         if (strcmp(bytecode->params[index], name) == 0) {
