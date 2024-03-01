@@ -29,7 +29,7 @@ struct AstNode *parse_expression_from_string(const char *input, struct ErrorInfo
         }
     }
 
-    if (parser.error.error != PARSER_ERROR_OK && error != NULL) {
+    if (error != NULL) {
         *error = parser.error;
     }
 
