@@ -1,5 +1,5 @@
-#ifndef OPTIMIZER_H__
-#define OPTIMIZER_H__
+#ifndef MINMATH_OPTIMIZER_H__
+#define MINMATH_OPTIMIZER_H__
 #pragma once
 
 #include "ast.h"
