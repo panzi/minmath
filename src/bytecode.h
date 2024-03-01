@@ -47,6 +47,8 @@ struct Bytecode {
     char **params;
     uint32_t params_size;
     uint32_t params_capacity;
+
+    size_t stack_size;
 };
 
 #define BYTECODE_INIT() {  \
@@ -56,6 +58,7 @@ struct Bytecode {
     .params = NULL,        \
     .params_size = 0,      \
     .params_capacity = 0,  \
+    .stack_size = 0,       \
 }
 
 struct Bytecode bytecode_compile(const struct AstNode *expr);

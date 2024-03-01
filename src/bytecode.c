@@ -98,6 +98,7 @@ static int32_t bytecode_add_param(struct Bytecode *bytecode, const char *name) {
 }
 
 static bool bytecode_compile_ast(struct Bytecode *bytecode, const struct AstNode *expr) {
+    // TODO: determine stack size!
     if (expr->type == NODE_AND) {
         if (!bytecode_compile_ast(bytecode, expr->data.binary.lhs)) {
             return false;
@@ -387,6 +388,8 @@ void bytecode_free(struct Bytecode *bytecode) {
     bytecode->params = NULL;
     bytecode->params_size = 0;
     bytecode->params_capacity = 0;
+
+    bytecode->stack_size = 0;
 }
 
 int *bytecode_alloc_params(const struct Bytecode *bytecode) {
