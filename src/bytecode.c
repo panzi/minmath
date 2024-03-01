@@ -26,6 +26,8 @@ union InstrArg {
     1                                              \
 )
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+
 static bool bytecode_add_instr(struct Bytecode *bytecode, enum Instr instr, union InstrArg arg) {
     size_t instr_size = INSTR_SIZE(instr);
 
@@ -97,134 +99,207 @@ static int32_t bytecode_add_param(struct Bytecode *bytecode, const char *name) {
     return index;
 }
 
-static bool bytecode_compile_ast(struct Bytecode *bytecode, const struct AstNode *expr) {
+static int32_t bytecode_compile_ast(struct Bytecode *bytecode, const struct AstNode *expr) {
     // TODO: determine stack size!
     if (expr->type == NODE_AND) {
-        if (!bytecode_compile_ast(bytecode, expr->data.binary.lhs)) {
-            return false;
+        int32_t lhs_stack = bytecode_compile_ast(bytecode, expr->data.binary.lhs);
+        if (lhs_stack < 0) {
+            return lhs_stack;
         }
 
         uint32_t jmp_arg_index = bytecode->instrs_size + 1;
 
         if (!bytecode_add_instr(bytecode, INSTR_JEZ, ZERO_ARG)) {
-            return false;
+            return -1;
         }
 
-        if (!bytecode_compile_ast(bytecode, expr->data.binary.rhs)) {
-            return false;
+        int32_t rhs_stack = bytecode_compile_ast(bytecode, expr->data.binary.rhs);
+        if (rhs_stack < 0) {
+            return rhs_stack;
         }
 
         uint32_t jmp_target = bytecode->instrs_size;
         memcpy(bytecode->instrs + jmp_arg_index, &jmp_target, sizeof(jmp_target));
 
-        return true;
+        return MAX(lhs_stack, rhs_stack);
     } else if (expr->type == NODE_OR) {
-        if (!bytecode_compile_ast(bytecode, expr->data.binary.lhs)) {
-            return false;
+        int32_t lhs_stack = bytecode_compile_ast(bytecode, expr->data.binary.lhs);
+        if (lhs_stack < 0) {
+            return lhs_stack;
         }
 
         uint32_t jmp_arg_index = bytecode->instrs_size + 1;
 
         if (!bytecode_add_instr(bytecode, INSTR_JNZ, ZERO_ARG)) {
-            return false;
+            return -1;
         }
 
-        if (!bytecode_compile_ast(bytecode, expr->data.binary.rhs)) {
-            return false;
+        int32_t rhs_stack = bytecode_compile_ast(bytecode, expr->data.binary.rhs);
+        if (rhs_stack < 0) {
+            return rhs_stack;
         }
 
         uint32_t jmp_target = bytecode->instrs_size;
         memcpy(bytecode->instrs + jmp_arg_index, &jmp_target, sizeof(jmp_target));
 
-        return true;
+        return MAX(lhs_stack, rhs_stack);
     } else if (ast_is_binary(expr)) {
-        if (!bytecode_compile_ast(bytecode, expr->data.binary.lhs)) {
-            return false;
+        int32_t lhs_stack = bytecode_compile_ast(bytecode, expr->data.binary.lhs);
+        if (lhs_stack < 0) {
+            return lhs_stack;
         }
 
-        if (!bytecode_compile_ast(bytecode, expr->data.binary.rhs)) {
-            return false;
+        int32_t rhs_stack = bytecode_compile_ast(bytecode, expr->data.binary.rhs);
+        if (rhs_stack < 0) {
+            return rhs_stack;
         }
 
         switch (expr->type) {
             case NODE_ADD:
-                return bytecode_add_instr(bytecode, INSTR_ADD, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_ADD, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_SUB:
-                return bytecode_add_instr(bytecode, INSTR_SUB, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_SUB, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_MUL:
-                return bytecode_add_instr(bytecode, INSTR_MUL, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_MUL, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_DIV:
-                return bytecode_add_instr(bytecode, INSTR_DIV, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_DIV, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_MOD:
-                return bytecode_add_instr(bytecode, INSTR_MOD, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_MOD, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_LT:
-                return bytecode_add_instr(bytecode, INSTR_LT, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_LT, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_GT:
-                return bytecode_add_instr(bytecode, INSTR_GT, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_GT, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_LE:
-                return bytecode_add_instr(bytecode, INSTR_LE, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_LE, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_GE:
-                return bytecode_add_instr(bytecode, INSTR_GE, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_GE, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_EQ:
-                return bytecode_add_instr(bytecode, INSTR_EQ, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_EQ, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_NE:
-                return bytecode_add_instr(bytecode, INSTR_NE, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_NE, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_BIT_AND:
-                return bytecode_add_instr(bytecode, INSTR_BIT_AND, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_BIT_AND, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_BIT_OR:
-                return bytecode_add_instr(bytecode, INSTR_BIT_OR, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_BIT_OR, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_BIT_XOR:
-                return bytecode_add_instr(bytecode, INSTR_BIT_XOR, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_BIT_XOR, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             default:
                 assert(false);
-                return false;
+                errno = EINVAL;
+                return -1;
         }
+
+        if (rhs_stack >= INT32_MAX) {
+            errno = ENOMEM;
+            return -1;
+        }
+        // the lhs result needs to stay on the stack while the rhs is calculated
+        ++ rhs_stack;
+
+        return MAX(lhs_stack, rhs_stack);
     } else if (ast_is_unary(expr)) {
-        if (!bytecode_compile_ast(bytecode, expr->data.child)) {
-            return false;
+        int32_t stack_size = bytecode_compile_ast(bytecode, expr->data.child);
+        if (stack_size < 0) {
+            return stack_size;
         }
 
         switch (expr->type) {
             case NODE_NEG:
-                return bytecode_add_instr(bytecode, INSTR_NEG, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_NEG, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_BIT_NEG:
-                return bytecode_add_instr(bytecode, INSTR_BIT_NEG, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_BIT_NEG, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             case NODE_NOT:
-                return bytecode_add_instr(bytecode, INSTR_NOT, ZERO_ARG);
+                if (!bytecode_add_instr(bytecode, INSTR_NOT, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
 
             default:
                 assert(false);
-                return false;
+                errno = EINVAL;
+                return -1;
         }
+
+        return stack_size;
     } else if (expr->type == NODE_IF) {
-        if (!bytecode_compile_ast(bytecode, expr->data.terneary.cond)) {
-            return false;
+        int32_t cond_stack = bytecode_compile_ast(bytecode, expr->data.terneary.cond);
+        if (cond_stack < 0) {
+            return cond_stack;
         }
 
         uint32_t cond_jmp_arg_index = bytecode->instrs_size + 1;
 
         if (!bytecode_add_instr(bytecode, INSTR_JNP, ZERO_ARG)) {
-            return false;
+            return -1;
         }
 
-        if (!bytecode_compile_ast(bytecode, expr->data.terneary.then_expr)) {
-            return false;
+        int32_t then_stack = bytecode_compile_ast(bytecode, expr->data.terneary.then_expr);
+        if (then_stack < 0) {
+            return then_stack;
         }
 
         uint32_t jmp_target = bytecode->instrs_size;
@@ -233,30 +308,38 @@ static bool bytecode_compile_ast(struct Bytecode *bytecode, const struct AstNode
         uint32_t then_jmp_arg_index = bytecode->instrs_size + 1;
 
         if (!bytecode_add_instr(bytecode, INSTR_JMP, ZERO_ARG)) {
-            return false;
+            return -1;
         }
 
-        if (!bytecode_compile_ast(bytecode, expr->data.terneary.else_expr)) {
-            return false;
+        int32_t else_stack = bytecode_compile_ast(bytecode, expr->data.terneary.else_expr);
+        if (else_stack < 0) {
+            return else_stack;
         }
 
         jmp_target = bytecode->instrs_size;
         memcpy(bytecode->instrs + then_jmp_arg_index, &jmp_target, sizeof(jmp_target));
 
-        return true;
+        int32_t stack_size = MAX(cond_stack, then_stack);
+        return MAX(stack_size, else_stack);
     } else if (expr->type == NODE_INT) {
-        return bytecode_add_instr(bytecode, INSTR_INT, (union InstrArg){ .value = expr->data.value });
+        if (!bytecode_add_instr(bytecode, INSTR_INT, (union InstrArg){ .value = expr->data.value })) {
+            return -1;
+        }
+        return 1;
     } else if (expr->type == NODE_VAR) {
         int32_t index = bytecode_add_param(bytecode, expr->data.ident);
         if (index < 0) {
-            return false;
+            return -1;
         }
-        return bytecode_add_instr(bytecode, INSTR_VAR, (union InstrArg){ .index = index });
+        if (!bytecode_add_instr(bytecode, INSTR_VAR, (union InstrArg){ .index = index })) {
+            return -1;
+        }
+        return 1;
     } else {
         assert(false);
-        return false;
+        errno = EINVAL;
+        return -1;
     }
-    return true;
 }
 
 static int32_t bytecode_optimize_jump_target(struct Bytecode *bytecode, uint32_t index) {
@@ -350,11 +433,14 @@ bool bytecode_optimize(struct Bytecode *bytecode) {
 
 struct Bytecode bytecode_compile(const struct AstNode *expr) {
     struct Bytecode bytecode = BYTECODE_INIT();
+    int32_t stack_size = bytecode_compile_ast(&bytecode, expr);
 
-    if (!bytecode_compile_ast(&bytecode, expr)) {
+    if (stack_size < 0) {
         bytecode_free(&bytecode);
         return bytecode;
     }
+
+    bytecode.stack_size = stack_size;
 
     if (!bytecode_add_instr(&bytecode, INSTR_RET, ZERO_ARG)) {
         bytecode_free(&bytecode);
@@ -368,9 +454,199 @@ bool bytecode_is_ok(const struct Bytecode *bytecode) {
     return BYTECODE_IS_OK(bytecode);
 }
 
-int bytecode_execute(const struct Bytecode *bytecode, const int *params) {
-    // TODO
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(MINMATH_ADDRESS_FROM_LABEL)
+#   define MINMATH_ADDRESS_FROM_LABEL
+#endif
+
+#ifdef MINMATH_ADDRESS_FROM_LABEL
+#   define DISPATCH_INSTR goto *(jmptbl[instrs[instr_ptr]]);
+#   define BEGIN_EXEC DISPATCH_INSTR
+#   define JMP_LABEL(NAME) DO_ ## NAME:
+#   define NEXT_INSTR DISPATCH_INSTR
+#   define END_EXEC
+#else
+#   define BEGIN_EXEC \
+        const uint32_t instrs_size = bytecode->instrs_size; \
+        while (instr_ptr < instrs_size) { \
+            switch (instrs[instr_ptr]) {
+#   define JMP_LABEL(NAME) case INSTR_ ## NAME:
+#   define NEXT_INSTR break;
+#   define END_EXEC } }
+#endif
+
+int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *stack) {
+#ifdef MINMATH_ADDRESS_FROM_LABEL
+    void *jmptbl[] = {
+        [INSTR_INT]     = &&DO_INT,
+        [INSTR_VAR]     = &&DO_VAR,
+        [INSTR_ADD]     = &&DO_ADD,
+        [INSTR_SUB]     = &&DO_SUB,
+        [INSTR_MUL]     = &&DO_MUL,
+        [INSTR_DIV]     = &&DO_DIV,
+        [INSTR_MOD]     = &&DO_MOD,
+        [INSTR_BIT_AND] = &&DO_BIT_AND,
+        [INSTR_BIT_XOR] = &&DO_BIT_XOR,
+        [INSTR_BIT_OR]  = &&DO_BIT_OR,
+        [INSTR_LT]      = &&DO_LT,
+        [INSTR_LE]      = &&DO_LE,
+        [INSTR_GT]      = &&DO_GT,
+        [INSTR_GE]      = &&DO_GE,
+        [INSTR_EQ]      = &&DO_EQ,
+        [INSTR_NE]      = &&DO_NE,
+        [INSTR_NEG]     = &&DO_NEG,
+        [INSTR_BIT_NEG] = &&DO_BIT_NEG,
+        [INSTR_NOT]     = &&DO_NOT,
+        [INSTR_JMP]     = &&DO_JMP,
+        [INSTR_JEZ]     = &&DO_JEZ,
+        [INSTR_JNZ]     = &&DO_JNZ,
+        [INSTR_JNP]     = &&DO_JNP,
+        [INSTR_RET]     = &&DO_RET,
+    };
+#endif
+
+    const uint8_t *instrs = bytecode->instrs;
+    uint32_t instr_ptr = 0;
+    uint32_t stack_ptr = 0;
+    uint32_t addr;
+
+    BEGIN_EXEC
+
+    JMP_LABEL(INT)
+    ++ instr_ptr;
+    memcpy(stack + stack_ptr, instrs + instr_ptr, sizeof(int));
+    ++ stack_ptr;
+    instr_ptr += sizeof(int);
+    NEXT_INSTR
+
+    JMP_LABEL(VAR)
+    ++ instr_ptr;
+    memcpy(&addr, instrs + instr_ptr, sizeof(addr));
+    instr_ptr += sizeof(addr);
+    stack[stack_ptr] = params[addr];
+    ++ stack_ptr;
+    NEXT_INSTR
+
+    JMP_LABEL(ADD)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] += stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(SUB)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] -= stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(MUL)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] *= stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(DIV)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] /= stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(MOD)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] %= stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(BIT_AND)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] &= stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(BIT_XOR)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] ^= stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(BIT_OR)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] |= stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(LT)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] = stack[stack_ptr - 1] < stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(LE)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] = stack[stack_ptr - 1] <= stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(GT)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] = stack[stack_ptr - 1] > stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(GE)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] = stack[stack_ptr - 1] >= stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(EQ)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] = stack[stack_ptr - 1] == stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(NE)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] = stack[stack_ptr - 1] != stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(NEG)
+    ++ instr_ptr;
+    stack[stack_ptr - 1] = -stack[stack_ptr - 1];
+    NEXT_INSTR
+
+    JMP_LABEL(BIT_NEG)
+    ++ instr_ptr;
+    stack[stack_ptr - 1] = ~stack[stack_ptr - 1];
+    NEXT_INSTR
+
+    JMP_LABEL(NOT)
+    ++ instr_ptr;
+    stack[stack_ptr - 1] = !stack[stack_ptr - 1];
+    NEXT_INSTR
+
+    JMP_LABEL(JMP)
+    NEXT_INSTR
+
+    JMP_LABEL(JEZ)
+    NEXT_INSTR
+
+    JMP_LABEL(JNZ)
+    NEXT_INSTR
+
+    JMP_LABEL(JNP)
+    NEXT_INSTR
+
+    JMP_LABEL(RET)
+    assert(stack_ptr == 1);
+    -- stack_ptr;
+    return stack[stack_ptr];
+    NEXT_INSTR
+
+    END_EXEC
+
     assert(false);
+    errno = EINVAL;
     return -1;
 }
 
@@ -394,6 +670,10 @@ void bytecode_free(struct Bytecode *bytecode) {
 
 int *bytecode_alloc_params(const struct Bytecode *bytecode) {
     return calloc(bytecode->params_size, sizeof(int));
+}
+
+int *bytecode_alloc_stack(const struct Bytecode *bytecode) {
+    return calloc(bytecode->stack_size, sizeof(int));
 }
 
 int32_t bytecode_get_param_index(const struct Bytecode *bytecode, const char *name) {

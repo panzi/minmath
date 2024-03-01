@@ -64,11 +64,12 @@ struct Bytecode {
 struct Bytecode bytecode_compile(const struct AstNode *expr);
 bool bytecode_is_ok(const struct Bytecode *bytecode);
 bool bytecode_optimize(struct Bytecode *bytecode);
-int  bytecode_execute(const struct Bytecode *bytecode, const int *params);
+int  bytecode_execute(const struct Bytecode *bytecode, const int *params, int *stack);
 void bytecode_free(struct Bytecode *bytecode);
 int32_t bytecode_get_param_index(const struct Bytecode *bytecode, const char *name);
 bool bytecode_set_param(const struct Bytecode *bytecode, int *params, const char *name, int value);
 int *bytecode_alloc_params(const struct Bytecode *bytecode);
+int *bytecode_alloc_stack(const struct Bytecode *bytecode);
 
 #define BYTECODE_IS_OK(BYTECODE) ((BYTECODE)->instrs != NULL)
 #define bytecode_is_ok(BYTECODE) BYTECODE_IS_OK(BYTECODE)
