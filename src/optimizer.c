@@ -22,6 +22,26 @@ static inline bool ast_is_boolean(const struct AstNode *expr) {
     }
 }
 
+static inline struct AstNode *ast_create_bool(struct AstNode *child) {
+    if (ast_is_boolean(child)) {
+        return child;
+    }
+
+    struct AstNode *bool1 = ast_create_unary(NODE_NOT, child);
+    if (bool1 == NULL) {
+        ast_free(child);
+        return NULL;
+    }
+
+    struct AstNode *bool2 = ast_create_unary(NODE_NOT, bool1);
+    if (bool2 == NULL) {
+        ast_free(bool1);
+        return NULL;
+    }
+
+    return bool2;
+}
+
 // This optimizer just does simple constant folding.
 struct AstNode *ast_optimize(const struct AstNode *expr) {
     assert(expr != NULL);
@@ -113,17 +133,35 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
             ast_free(rhs);
             return lhs;
         } else if (
-            ((expr->type == NODE_ADD || expr->type == NODE_SUB || expr->type == NODE_BIT_OR) && rhs->type == NODE_INT && rhs->data.value == 0) ||
-            (expr->type == NODE_OR && rhs->type == NODE_INT && rhs->data.value == 0)
+            (expr->type == NODE_ADD || expr->type == NODE_SUB || expr->type == NODE_BIT_OR) && rhs->type == NODE_INT && rhs->data.value == 0
         ) {
             ast_free(rhs);
             return lhs;
         } else if (
-            ((expr->type == NODE_ADD || expr->type == NODE_BIT_OR) && lhs->type == NODE_INT && lhs->data.value == 0) ||
-            (expr->type == NODE_OR && lhs->type == NODE_INT && lhs->data.value == 0)
+            (expr->type == NODE_ADD || expr->type == NODE_BIT_OR) && lhs->type == NODE_INT && lhs->data.value == 0
         ) {
             ast_free(lhs);
             return rhs;
+        } else if (
+            expr->type == NODE_OR && rhs->type == NODE_INT && rhs->data.value == 0
+        ) {
+            ast_free(rhs);
+            return ast_create_bool(lhs);
+        } else if (
+            expr->type == NODE_OR && lhs->type == NODE_INT && lhs->data.value == 0
+        ) {
+            ast_free(lhs);
+            return ast_create_bool(rhs);
+        } else if (
+            expr->type == NODE_AND && rhs->type == NODE_INT && rhs->data.value != 0
+        ) {
+            ast_free(rhs);
+            return ast_create_bool(lhs);
+        } else if (
+            expr->type == NODE_AND && lhs->type == NODE_INT && lhs->data.value != 0
+        ) {
+            ast_free(lhs);
+            return ast_create_bool(rhs);
         } else if (
             expr->type == NODE_SUB && lhs->type == NODE_INT && lhs->data.value == 0
         ) {
