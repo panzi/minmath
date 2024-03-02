@@ -6,10 +6,6 @@
 
 #include "bytecode.h"
 
-#ifdef bytecode_is_ok
-#undef bytecode_is_ok
-#endif
-
 union InstrArg {
     int value;
     size_t index;
@@ -475,10 +471,6 @@ bool bytecode_compile(struct Bytecode *bytecode, const struct AstNode *expr) {
     }
 
     return true;
-}
-
-bool bytecode_is_ok(const struct Bytecode *bytecode) {
-    return BYTECODE_IS_OK(bytecode);
 }
 
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(MINMATH_ADDRESS_FROM_LABEL)

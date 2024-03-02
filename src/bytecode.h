@@ -64,7 +64,6 @@ struct Bytecode {
 }
 
 bool bytecode_compile(struct Bytecode *bytecode, const struct AstNode *expr);
-bool bytecode_is_ok(const struct Bytecode *bytecode);
 bool bytecode_optimize(struct Bytecode *bytecode);
 int  bytecode_execute(const struct Bytecode *bytecode, const int *params, int *stack);
 void bytecode_free(struct Bytecode *bytecode);
@@ -74,9 +73,6 @@ bool bytecode_set_param(const struct Bytecode *bytecode, int *params, const char
 int *bytecode_alloc_params(const struct Bytecode *bytecode);
 int *bytecode_alloc_stack(const struct Bytecode *bytecode);
 void bytecode_print(const struct Bytecode *bytecode, FILE *stream);
-
-#define BYTECODE_IS_OK(BYTECODE) ((BYTECODE)->instrs != NULL)
-#define bytecode_is_ok(BYTECODE) BYTECODE_IS_OK(BYTECODE)
 
 #ifdef __cplusplus
 }

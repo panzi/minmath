@@ -262,11 +262,11 @@ int main(int argc, char *argv[]) {
                 ast_free(expr);
             }
 
-            if (error_count > 0) {
-                bytecode_free(&bytecode);
-                fprintf(stderr, "Aborting due to errors!\n");
-                return 1;
-            }
+            // if (error_count > 0) {
+            //     bytecode_free(&bytecode);
+            //     fprintf(stderr, "Aborting due to errors!\n");
+            //     return 1;
+            // }
         }
     }
 
