@@ -715,6 +715,11 @@ bool bytecode_clone(const struct Bytecode *src, struct Bytecode *dest) {
 
     char **params = calloc(src->params_capacity, sizeof(char*));
 
+    if (params == NULL) {
+        free(instrs);
+        return NULL;
+    }
+
     for (size_t index = 0; index < src->params_size; ++ index) {
         char *param = params[index] = strdup(src->params[index]);
         if (param == NULL) {
