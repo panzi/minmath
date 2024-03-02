@@ -350,7 +350,6 @@ static ptrdiff_t bytecode_compile_ast(struct Bytecode *bytecode, const struct As
         }
         return 1;
     } else {
-        fprintf(stderr, "*** illegal node type: %d\n", expr->type);
         assert(false);
         errno = EINVAL;
         return -1;
