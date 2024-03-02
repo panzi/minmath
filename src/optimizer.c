@@ -171,6 +171,15 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                 ast_free(lhs);
                 return ast_create_bool(rhs);
             } else if (
+                expr->type == NODE_OR && (
+                    (rhs->type == NODE_INT && rhs->data.value != 0) ||
+                    (lhs->type == NODE_INT && lhs->data.value != 0)
+                )
+            ) {
+                ast_free(rhs);
+                ast_free(lhs);
+                return ast_create_int(1);
+            } else if (
                 expr->type == NODE_AND && rhs->type == NODE_INT && rhs->data.value != 0
             ) {
                 ast_free(rhs);
