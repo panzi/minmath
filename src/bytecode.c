@@ -699,6 +699,47 @@ int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *st
     return -1;
 }
 
+bool bytecode_clone(const struct Bytecode *src, struct Bytecode *dest) {
+    uint8_t *instrs = malloc(src->instrs_capacity);
+
+    if (instrs == NULL) {
+        return false;
+    }
+
+    memcpy(instrs, src->instrs, src->instrs_size);
+
+#ifndef NDEBUG
+    // mark rest as illegal instructions
+    memset(instrs + src->instrs_size, 0xFF, src->instrs_capacity - src->instrs_size);
+#endif
+
+    char **params = calloc(src->params_capacity, sizeof(char*));
+
+    for (size_t index = 0; index < src->params_size; ++ index) {
+        char *param = params[index] = strdup(src->params[index]);
+        if (param == NULL) {
+            while (index > 0) {
+                free(params[-- index]);
+            }
+            free(params);
+            free(instrs);
+            return NULL;
+        }
+    }
+
+    dest->instrs          = instrs;
+    dest->instrs_size     = src->instrs_size;
+    dest->instrs_capacity = src->instrs_capacity;
+
+    dest->params          = params;
+    dest->params_size     = src->params_size;
+    dest->params_capacity = src->params_capacity;
+
+    dest->stack_size = src->stack_size;
+
+    return true;
+}
+
 void bytecode_clear(struct Bytecode *bytecode) {
     for (size_t index = 0; index < bytecode->params_size; ++ index) {
         free(bytecode->params[index]);

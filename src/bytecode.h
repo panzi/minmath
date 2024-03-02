@@ -64,6 +64,7 @@ struct Bytecode {
 }
 
 bool bytecode_compile(struct Bytecode *bytecode, const struct AstNode *expr);
+bool bytecode_clone(const struct Bytecode *src, struct Bytecode *dest);
 bool bytecode_optimize(struct Bytecode *bytecode);
 int  bytecode_execute(const struct Bytecode *bytecode, const int *params, int *stack);
 void bytecode_free(struct Bytecode *bytecode);
