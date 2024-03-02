@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #include "bytecode.h"
 
@@ -100,7 +101,6 @@ static int32_t bytecode_add_param(struct Bytecode *bytecode, const char *name) {
 }
 
 static int32_t bytecode_compile_ast(struct Bytecode *bytecode, const struct AstNode *expr) {
-    // TODO: determine stack size!
     if (expr->type == NODE_AND) {
         int32_t lhs_stack = bytecode_compile_ast(bytecode, expr->data.binary.lhs);
         if (lhs_stack < 0) {
@@ -302,14 +302,14 @@ static int32_t bytecode_compile_ast(struct Bytecode *bytecode, const struct AstN
             return then_stack;
         }
 
-        uint32_t jmp_target = bytecode->instrs_size;
-        memcpy(bytecode->instrs + cond_jmp_arg_index, &jmp_target, sizeof(jmp_target));
-
         uint32_t then_jmp_arg_index = bytecode->instrs_size + 1;
 
         if (!bytecode_add_instr(bytecode, INSTR_JMP, ZERO_ARG)) {
             return -1;
         }
+
+        uint32_t jmp_target = bytecode->instrs_size;
+        memcpy(bytecode->instrs + cond_jmp_arg_index, &jmp_target, sizeof(jmp_target));
 
         int32_t else_stack = bytecode_compile_ast(bytecode, expr->data.terneary.else_expr);
         if (else_stack < 0) {
@@ -336,6 +336,7 @@ static int32_t bytecode_compile_ast(struct Bytecode *bytecode, const struct AstN
         }
         return 1;
     } else {
+        fprintf(stderr, "*** illegal node type: %d\n", expr->type);
         assert(false);
         errno = EINVAL;
         return -1;
@@ -346,7 +347,7 @@ static int32_t bytecode_optimize_jump_target(struct Bytecode *bytecode, uint32_t
     enum Instr instr = bytecode->instrs[index];
     if (instr == INSTR_JMP) {
         uint32_t target = 0;
-        memcpy(&target, bytecode->instrs + index, sizeof(target));
+        memcpy(&target, bytecode->instrs + index + 1, sizeof(target));
         if (index >= bytecode->instrs_size) {
             errno = EINVAL;
             return -1;
@@ -354,7 +355,11 @@ static int32_t bytecode_optimize_jump_target(struct Bytecode *bytecode, uint32_t
         int32_t res = bytecode_optimize_jump_target(bytecode, target);
         if (res >= 0) {
             target = res;
-            memcpy(bytecode->instrs + index, &target, sizeof(target));
+            if (bytecode->instrs[target] == INSTR_RET) {
+                memset(bytecode->instrs + index, INSTR_RET, 1 + sizeof(target));
+            } else {
+                memcpy(bytecode->instrs + index + 1, &target, sizeof(target));
+            }
         }
         return res;
     } else {
@@ -393,8 +398,9 @@ bool bytecode_optimize(struct Bytecode *bytecode) {
         case INSTR_NEG:
         case INSTR_BIT_NEG:
         case INSTR_NOT:
+        case INSTR_POP:
         case INSTR_RET:
-            index += 1;
+            ++ index;
             break;
 
         case INSTR_JMP:
@@ -402,7 +408,7 @@ bool bytecode_optimize(struct Bytecode *bytecode) {
         case INSTR_JNZ:
         case INSTR_JNP:
         {
-            index += 1;
+            ++ index;
             if (index >= bytecode->instrs_size) {
                 errno = EINVAL;
                 return false;
@@ -417,7 +423,16 @@ bool bytecode_optimize(struct Bytecode *bytecode) {
             }
 
             target = res;
-            memcpy(bytecode->instrs + index, &target, sizeof(target));
+            if (bytecode->instrs[target] == INSTR_RET) {
+                if (instr == INSTR_JNP) {
+                    bytecode->instrs[index - 1] = INSTR_POP;
+                    memset(bytecode->instrs + index, INSTR_RET, sizeof(target));
+                } else {
+                    memset(bytecode->instrs + index - 1, INSTR_RET, 1 + sizeof(target));
+                }
+            } else {
+                memcpy(bytecode->instrs + index, &target, sizeof(target));
+            }
 
             index += sizeof(uint32_t);
             break;
@@ -458,7 +473,9 @@ bool bytecode_is_ok(const struct Bytecode *bytecode) {
 #endif
 
 #ifdef MINMATH_ADDRESS_FROM_LABEL
-#   define DISPATCH_INSTR goto *(jmptbl[instrs[instr_ptr]]);
+#   define DISPATCH_INSTR \
+        assert(instr_ptr < bytecode->instrs_size); \
+        goto *(jmptbl[instrs[instr_ptr]]);
 #   define BEGIN_EXEC DISPATCH_INSTR
 #   define JMP_LABEL(NAME) DO_ ## NAME:
 #   define NEXT_INSTR DISPATCH_INSTR
@@ -475,7 +492,7 @@ bool bytecode_is_ok(const struct Bytecode *bytecode) {
 
 int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *stack) {
 #ifdef MINMATH_ADDRESS_FROM_LABEL
-    void *jmptbl[] = {
+    static const void *jmptbl[] = {
         [INSTR_INT]     = &&DO_INT,
         [INSTR_VAR]     = &&DO_VAR,
         [INSTR_ADD]     = &&DO_ADD,
@@ -499,6 +516,7 @@ int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *st
         [INSTR_JEZ]     = &&DO_JEZ,
         [INSTR_JNZ]     = &&DO_JNZ,
         [INSTR_JNP]     = &&DO_JNP,
+        [INSTR_POP]     = &&DO_POP,
         [INSTR_RET]     = &&DO_RET,
     };
 #endif
@@ -625,15 +643,37 @@ int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *st
     NEXT_INSTR
 
     JMP_LABEL(JMP)
+    ++ instr_ptr;
+    memcpy(&instr_ptr, instrs + instr_ptr, sizeof(instr_ptr));
     NEXT_INSTR
 
     JMP_LABEL(JEZ)
+    if (stack[stack_ptr - 1]) {
+        instr_ptr += 1 + sizeof(instr_ptr);
+    } else {
+        memcpy(&instr_ptr, instrs + instr_ptr + 1, sizeof(instr_ptr));
+    }
     NEXT_INSTR
 
     JMP_LABEL(JNZ)
+    if (stack[stack_ptr - 1]) {
+        memcpy(&instr_ptr, instrs + instr_ptr + 1, sizeof(instr_ptr));
+    } else {
+        instr_ptr += 1 + sizeof(instr_ptr);
+    }
     NEXT_INSTR
 
     JMP_LABEL(JNP)
+    -- stack_ptr;
+    if (stack[stack_ptr]) {
+        memcpy(&instr_ptr, instrs + instr_ptr + 1, sizeof(instr_ptr));
+    } else {
+        instr_ptr += 1 + sizeof(instr_ptr);
+    }
+    NEXT_INSTR
+
+    JMP_LABEL(POP)
+    -- stack_ptr;
     NEXT_INSTR
 
     JMP_LABEL(RET)
@@ -650,6 +690,10 @@ int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *st
 }
 
 void bytecode_clear(struct Bytecode *bytecode) {
+    for (uint32_t index = 0; index < bytecode->params_size; ++ index) {
+        free(bytecode->params[index]);
+    }
+
     bytecode->instrs_size = 0;
     bytecode->instrs_capacity = 0;
 
@@ -701,4 +745,158 @@ bool bytecode_set_param(const struct Bytecode *bytecode, int *params, const char
     }
     params[index] = value;
     return true;
+}
+
+void bytecode_print(const struct Bytecode *bytecode, FILE *stream) {
+    int value;
+    uint32_t addr;
+    const uint8_t *instrs = bytecode->instrs;
+    fprintf(stream, "stack_size: %" PRIu32 "\n", bytecode->stack_size);
+
+    fprintf(stream, "parameters:\n");
+    for (uint32_t param_index = 0; param_index < bytecode->params_size; ++ param_index) {
+        fprintf(stream, "%6" PRIu32 ": %s\n", param_index, bytecode->params[param_index]);
+    }
+
+    fprintf(stream, "instructions:\n");
+    for (uint32_t instr_ptr = 0; instr_ptr < bytecode->instrs_size;) {
+        switch (instrs[instr_ptr]) {
+        case INSTR_INT:
+            memcpy(&value, instrs + instr_ptr + 1, sizeof(int));
+            fprintf(stream, "%6" PRIu32 ": int %d\n", instr_ptr, value);
+            ++ instr_ptr;
+            instr_ptr += sizeof(int);
+            break;
+
+        case INSTR_VAR:
+            memcpy(&addr, instrs + instr_ptr + 1, sizeof(addr));
+            fprintf(stream, "%6" PRIu32 ": var %s\n", instr_ptr, bytecode->params[addr]);
+            ++ instr_ptr;
+            instr_ptr += sizeof(int);
+            break;
+
+        case INSTR_ADD:
+            fprintf(stream, "%6" PRIu32 ": add\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_SUB:
+            fprintf(stream, "%6" PRIu32 ": sub\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_MUL:
+            fprintf(stream, "%6" PRIu32 ": mul\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_DIV:
+            fprintf(stream, "%6" PRIu32 ": div\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_MOD:
+            fprintf(stream, "%6" PRIu32 ": mod\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_BIT_AND:
+            fprintf(stream, "%6" PRIu32 ": bit_and\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_BIT_XOR:
+            fprintf(stream, "%6" PRIu32 ": bit_xor\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_BIT_OR:
+            fprintf(stream, "%6" PRIu32 ": bit_or\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_LT:
+            fprintf(stream, "%6" PRIu32 ": lt\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_LE:
+            fprintf(stream, "%6" PRIu32 ": le\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_GT:
+            fprintf(stream, "%6" PRIu32 ": gt\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_GE:
+            fprintf(stream, "%6" PRIu32 ": ge\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_EQ:
+            fprintf(stream, "%6" PRIu32 ": eq\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_NE:
+            fprintf(stream, "%6" PRIu32 ": ne\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_NEG:
+            fprintf(stream, "%6" PRIu32 ": neg\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_BIT_NEG:
+            fprintf(stream, "%6" PRIu32 ": bit_neg\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_NOT:
+            fprintf(stream, "%6" PRIu32 ": not\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_JMP:
+            memcpy(&addr, instrs + instr_ptr + 1, sizeof(instr_ptr));
+            fprintf(stream, "%6" PRIu32 ": jmp %" PRIu32 "\n", instr_ptr, addr);
+            instr_ptr += 1 + sizeof(addr);
+            break;
+
+        case INSTR_JEZ:
+            memcpy(&addr, instrs + instr_ptr + 1, sizeof(instr_ptr));
+            fprintf(stream, "%6" PRIu32 ": jez %" PRIu32 "\n", instr_ptr, addr);
+            instr_ptr += 1 + sizeof(addr);
+            break;
+
+        case INSTR_JNZ:
+            memcpy(&addr, instrs + instr_ptr + 1, sizeof(instr_ptr));
+            fprintf(stream, "%6" PRIu32 ": jnz %" PRIu32 "\n", instr_ptr, addr);
+            instr_ptr += 1 + sizeof(addr);
+            break;
+
+        case INSTR_JNP:
+            memcpy(&addr, instrs + instr_ptr + 1, sizeof(instr_ptr));
+            fprintf(stream, "%6" PRIu32 ": jnp %" PRIu32 "\n", instr_ptr, addr);
+            instr_ptr += 1 + sizeof(addr);
+            break;
+
+        case INSTR_POP:
+            fprintf(stream, "%6" PRIu32 ": pop\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_RET:
+            fprintf(stream, "%6" PRIu32 ": ret\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        default:
+            assert(false);
+            return;
+        }
+    }
 }

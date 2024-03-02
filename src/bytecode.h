@@ -5,6 +5,7 @@
 #include "ast.h"
 
 #include <stddef.h>
+#include <stdio.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -36,6 +37,7 @@ enum Instr {
     INSTR_JEZ, // jump if current value equals zero
     INSTR_JNZ, // jump if current value doesn't equal zero
     INSTR_JNP, // jump if current value equals zero and pop current value
+    INSTR_POP,
     INSTR_RET,
 };
 
@@ -48,7 +50,7 @@ struct Bytecode {
     uint32_t params_size;
     uint32_t params_capacity;
 
-    size_t stack_size;
+    uint32_t stack_size;
 };
 
 #define BYTECODE_INIT() {  \
@@ -71,6 +73,7 @@ int32_t bytecode_get_param_index(const struct Bytecode *bytecode, const char *na
 bool bytecode_set_param(const struct Bytecode *bytecode, int *params, const char *name, int value);
 int *bytecode_alloc_params(const struct Bytecode *bytecode);
 int *bytecode_alloc_stack(const struct Bytecode *bytecode);
+void bytecode_print(const struct Bytecode *bytecode, FILE *stream);
 
 #define BYTECODE_IS_OK(BYTECODE) ((BYTECODE)->instrs != NULL)
 #define bytecode_is_ok(BYTECODE) BYTECODE_IS_OK(BYTECODE)

@@ -156,6 +156,9 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
             return NULL;
         }
 
+        // TODO: Remove double operation, though think about when it does
+        //       change the value of an integer (!!2 == 1, overflow with
+        //       -INT_MIN etc.). So maybe only ~~x.
         if (child->type == NODE_INT) {
             switch (expr->type) {
             case NODE_NEG:
@@ -177,6 +180,11 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                 return NULL;
             }
             return child;
+        } else if (child->type == NODE_BIT_NEG && child->data.child->type == NODE_BIT_NEG) {
+            struct AstNode *new_expr = child->data.child->data.child;
+            child->data.child->data.child = NULL;
+            ast_free(child);
+            return new_expr;
         }
 
         struct AstNode *unary_expr = ast_create_unary(expr->type, child);
