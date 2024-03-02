@@ -16,6 +16,7 @@ int main(int argc, char *argv[]) {
         struct ErrorInfo error;
         const char *source = argv[argind];
 
+#if 0
         expr = parse_expression_from_string(source, &error);
         if (expr != NULL) {
             int value = ast_execute(expr);
@@ -25,6 +26,7 @@ int main(int argc, char *argv[]) {
             print_parser_error(stderr, source, &error, 3);
             status = 1;
         }
+#endif
 
         expr = alt_parse_expression_from_string(source, &error);
         if (expr != NULL) {

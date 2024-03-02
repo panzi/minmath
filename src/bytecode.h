@@ -34,11 +34,9 @@ enum Instr {
     INSTR_BIT_NEG,
     INSTR_NOT,
     INSTR_JMP,
-    INSTR_JEZ, // jump if current value equals zero
-    INSTR_JNZ, // jump if current value doesn't equal zero
-    INSTR_JZP, // jump if current value equals zero and pop current value
-    INSTR_POP,
-    INSTR_SET1,
+    INSTR_JEZ, // jump if current value equals zero, on jump replace top of stack with 0, otherwise pop stack
+    INSTR_JNZ, // jump if current value doesn't equal zero, on jump replace top of stack with 1, otherwise pop stack
+    INSTR_JZP, // jump if current value equals zero and always pop stack
     INSTR_BOOL,
     INSTR_RET,
 };
