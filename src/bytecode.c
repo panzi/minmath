@@ -431,23 +431,22 @@ bool bytecode_optimize(struct Bytecode *bytecode) {
     return true;
 }
 
-struct Bytecode bytecode_compile(const struct AstNode *expr) {
-    struct Bytecode bytecode = BYTECODE_INIT();
-    int32_t stack_size = bytecode_compile_ast(&bytecode, expr);
+bool bytecode_compile(struct Bytecode *bytecode, const struct AstNode *expr) {
+    int32_t stack_size = bytecode_compile_ast(bytecode, expr);
 
     if (stack_size < 0) {
-        bytecode_free(&bytecode);
-        return bytecode;
+        bytecode_clear(bytecode);
+        return false;
     }
 
-    bytecode.stack_size = stack_size;
+    bytecode->stack_size = stack_size;
 
-    if (!bytecode_add_instr(&bytecode, INSTR_RET, ZERO_ARG)) {
-        bytecode_free(&bytecode);
-        return bytecode;
+    if (!bytecode_add_instr(bytecode, INSTR_RET, ZERO_ARG)) {
+        bytecode_clear(bytecode);
+        return false;
     }
 
-    return bytecode;
+    return true;
 }
 
 bool bytecode_is_ok(const struct Bytecode *bytecode) {
@@ -648,6 +647,16 @@ int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *st
     assert(false);
     errno = EINVAL;
     return -1;
+}
+
+void bytecode_clear(struct Bytecode *bytecode) {
+    bytecode->instrs_size = 0;
+    bytecode->instrs_capacity = 0;
+
+    bytecode->params_size = 0;
+    bytecode->params_capacity = 0;
+
+    bytecode->stack_size = 0;
 }
 
 void bytecode_free(struct Bytecode *bytecode) {

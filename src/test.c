@@ -2,8 +2,11 @@
 #include "parser.h"
 #include "alt_parser.h"
 #include "optimizer.h"
+#include "bytecode.h"
 
+#include <stdlib.h>
 #include <stdio.h>
+#include <limits.h>
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
@@ -26,12 +29,61 @@ const struct ParseFunc PARSE_FUNCS[] = {
     { NULL, NULL },
 };
 
+bool params_from_environ(const struct Bytecode *bytecode, int *params, char * const *environ) {
+    char *name = NULL;
+    size_t name_size = 0;
+    for (char * const *envvar = environ; *envvar; ++ envvar) {
+        const char *equals_ptr = strchr(*envvar, '=');
+        if (equals_ptr == NULL) {
+            errno = EINVAL;
+            free(name);
+            return false;
+        }
+
+        size_t var_size = (size_t)(equals_ptr - *envvar) + 1;
+        if (var_size > name_size) {
+            char *new_name = realloc(name, var_size);
+            if (new_name == NULL) {
+                free(name);
+                return false;
+            }
+            name = new_name;
+            name_size = var_size;
+        }
+        memcpy(name, *envvar, var_size - 1);
+        name[var_size - 1] = 0;
+
+        char *endptr = NULL;
+        const char *valptr = equals_ptr + 1;
+        long value = strtol(valptr, &endptr, 10);
+        if (!*valptr || *endptr) {
+            free(name);
+            return false;
+        }
+
+        if (value > INT_MAX) {
+            errno = ERANGE;
+            free(name);
+            return false;
+        }
+
+        if (!bytecode_set_param(bytecode, params, name, value)) {
+            free(name);
+            return false;
+        }
+    }
+
+    free(name);
+    return true;
+}
+
 int main(int argc, char *argv[]) {
     struct ErrorInfo error;
     struct timespec ts_start, ts_end;
     struct timeval tv_start, tv_end;
     int res_start, res_end;
     size_t error_count = 0;
+    struct Bytecode bytecode = BYTECODE_INIT();
 
     for (const struct ParseFunc *func = PARSE_FUNCS; func->name; ++ func) {
         printf("Testing %s\n", func->name);
@@ -95,10 +147,65 @@ int main(int argc, char *argv[]) {
                     ast_free(opt_expr);
                 }
 
+                if (!bytecode_compile(&bytecode, opt_expr)) {
+                    fprintf(stderr, "*** [%s] Error compiling to bytecode: %s\n", func->name, strerror(errno));
+                    fprintf(stderr, "Expression: %s\n", test->expr);
+                    ++ error_count;
+                } else if (!bytecode_optimize(&bytecode)) {
+                    fprintf(stderr, "*** [%s] Error optimizing bytecode: %s\n", func->name, strerror(errno));
+                    fprintf(stderr, "Expression: %s\n", test->expr);
+                    ++ error_count;
+                } else {
+                    int *stack = bytecode_alloc_stack(&bytecode);
+                    if (stack == NULL) {
+                        fprintf(stderr, "*** [%s] Error allocating stack: %s\n", func->name, strerror(errno));
+                        fprintf(stderr, "Expression: %s\n", test->expr);
+                        ++ error_count;
+                    } else {
+                        int *params = bytecode_alloc_params(&bytecode);
+                        if (params == NULL) {
+                            fprintf(stderr, "*** [%s] Error allocating params: %s\n", func->name, strerror(errno));
+                            fprintf(stderr, "Expression: %s\n", test->expr);
+                            ++ error_count;
+                        } else {
+                            if (!params_from_environ(&bytecode, params, test->environ)) {
+                                fprintf(stderr, "*** [%s] Error initializing params: %s\n", func->name, strerror(errno));
+                                fprintf(stderr, "Expression: %s\n", test->expr);
+                                ++ error_count;
+                            } else {
+                                result = bytecode_execute(&bytecode, params, stack);
+
+                                if (result != test->result) {
+                                    fprintf(stderr, "*** [%s] Bytecode execution result missmatch:\nEnvironment:\n", func->name);
+                                    for (char **ptr = test->environ; *ptr; ++ ptr) {
+                                        fprintf(stderr, "    %s\n", *ptr);
+                                    }
+                                    fprintf(stderr,
+                                        "Expression:\n    %s\nOptimized Expression:\n    ",
+                                        test->expr);
+                                    ast_print(stderr, opt_expr);
+                                    fprintf(stderr,
+                                        "\nResult:\n    %d\nExpected:\n    %d\n\n",
+                                        result, test->result);
+
+                                    ++ error_count;
+                                }
+                            }
+
+                            free(params);
+                        }
+
+                        free(stack);
+                    }
+                }
+                bytecode_clear(&bytecode);
+
                 ast_free(expr);
             }
         }
     }
+
+    bytecode_free(&bytecode);
 
     if (error_count > 0) {
         fprintf(stderr, "%zu errors!\n", error_count);
