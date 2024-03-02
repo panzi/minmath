@@ -23,7 +23,7 @@ union InstrArg {
     (INSTR) == INSTR_JEZ ||                      \
     (INSTR) == INSTR_JNZ ||                      \
     (INSTR) == INSTR_JMP ||                      \
-    (INSTR) == INSTR_JNP ? 1 + sizeof(size_t) :  \
+    (INSTR) == INSTR_JZP ? 1 + sizeof(size_t) :  \
     1                                            \
 )
 
@@ -50,7 +50,11 @@ static bool bytecode_add_instr(struct Bytecode *bytecode, enum Instr instr, unio
 
 #ifndef NDEBUG
         // make it clear if some of the bytes aren't initialized correctly
-        memset(bytecode->instrs + bytecode->instrs_size, 0xFF, bytecode->instrs_capacity - bytecode->instrs_size);
+        memset(
+            instrs + bytecode->instrs_size,
+            0xFF,
+            new_capacity - bytecode->instrs_size
+        );
 #endif
 
         bytecode->instrs = instrs;
@@ -63,7 +67,7 @@ static bool bytecode_add_instr(struct Bytecode *bytecode, enum Instr instr, unio
         memcpy(bytecode->instrs + bytecode->instrs_size + 1, &arg.value, sizeof(arg.value));
     } else if (instr == INSTR_VAR) {
         memcpy(bytecode->instrs + bytecode->instrs_size + 1, &arg.index, sizeof(arg.index));
-    } else if (instr == INSTR_JEZ || instr == INSTR_JNZ || instr == INSTR_JMP || instr == INSTR_JNP) {
+    } else if (instr == INSTR_JEZ || instr == INSTR_JNZ || instr == INSTR_JMP || instr == INSTR_JZP) {
         memcpy(bytecode->instrs + bytecode->instrs_size + 1, &arg.index, sizeof(arg.index));
     }
 
@@ -81,13 +85,13 @@ static ptrdiff_t bytecode_add_param(struct Bytecode *bytecode, const char *name)
         size_t new_capacity;
         if (bytecode->params_capacity == 0) {
             new_capacity = 4;
-        } else if (bytecode->params_capacity > PTRDIFF_MAX / 2) {
+        } else if (bytecode->params_capacity > PTRDIFF_MAX / 2 / sizeof(char*)) {
             errno = ENOMEM;
             return -1;
         } else {
             new_capacity = bytecode->params_capacity * 2;
         }
-        char **params = realloc(bytecode->params, new_capacity);
+        char **params = realloc(bytecode->params, new_capacity * sizeof(char*));
         if (params == NULL) {
             return -1;
         }
@@ -119,6 +123,10 @@ static ptrdiff_t bytecode_compile_ast(struct Bytecode *bytecode, const struct As
             return -1;
         }
 
+        if (!bytecode_add_instr(bytecode, INSTR_POP, ZERO_ARG)) {
+            return -1;
+        }
+
         ptrdiff_t rhs_stack = bytecode_compile_ast(bytecode, expr->data.binary.rhs);
         if (rhs_stack < 0) {
             return rhs_stack;
@@ -137,6 +145,10 @@ static ptrdiff_t bytecode_compile_ast(struct Bytecode *bytecode, const struct As
         size_t jmp_arg_index = bytecode->instrs_size + 1;
 
         if (!bytecode_add_instr(bytecode, INSTR_JNZ, ZERO_ARG)) {
+            return -1;
+        }
+
+        if (!bytecode_add_instr(bytecode, INSTR_POP, ZERO_ARG)) {
             return -1;
         }
 
@@ -299,7 +311,7 @@ static ptrdiff_t bytecode_compile_ast(struct Bytecode *bytecode, const struct As
 
         size_t cond_jmp_arg_index = bytecode->instrs_size + 1;
 
-        if (!bytecode_add_instr(bytecode, INSTR_JNP, ZERO_ARG)) {
+        if (!bytecode_add_instr(bytecode, INSTR_JZP, ZERO_ARG)) {
             return -1;
         }
 
@@ -412,7 +424,7 @@ bool bytecode_optimize(struct Bytecode *bytecode) {
         case INSTR_JMP:
         case INSTR_JEZ:
         case INSTR_JNZ:
-        case INSTR_JNP:
+        case INSTR_JZP:
         {
             ++ index;
             if (index >= bytecode->instrs_size) {
@@ -430,7 +442,7 @@ bool bytecode_optimize(struct Bytecode *bytecode) {
 
             target = res;
             if (bytecode->instrs[target] == INSTR_RET) {
-                if (instr == INSTR_JNP) {
+                if (instr == INSTR_JZP) {
                     bytecode->instrs[index - 1] = INSTR_POP;
                     memset(bytecode->instrs + index, INSTR_RET, sizeof(target));
                 } else {
@@ -521,7 +533,7 @@ int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *st
         [INSTR_JMP]     = &&DO_JMP,
         [INSTR_JEZ]     = &&DO_JEZ,
         [INSTR_JNZ]     = &&DO_JNZ,
-        [INSTR_JNP]     = &&DO_JNP,
+        [INSTR_JZP]     = &&DO_JZP,
         [INSTR_POP]     = &&DO_POP,
         [INSTR_RET]     = &&DO_RET,
     };
@@ -669,12 +681,12 @@ int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *st
     }
     NEXT_INSTR
 
-    JMP_LABEL(JNP)
+    JMP_LABEL(JZP)
     -- stack_ptr;
     if (stack[stack_ptr]) {
-        memcpy(&instr_ptr, instrs + instr_ptr + 1, sizeof(instr_ptr));
-    } else {
         instr_ptr += 1 + sizeof(instr_ptr);
+    } else {
+        memcpy(&instr_ptr, instrs + instr_ptr + 1, sizeof(instr_ptr));
     }
     NEXT_INSTR
 
@@ -700,13 +712,14 @@ void bytecode_clear(struct Bytecode *bytecode) {
         free(bytecode->params[index]);
     }
 
+#ifndef NDEBUG
+    memset(bytecode->params, 0x00, bytecode->params_capacity * sizeof(*bytecode->params));
+    memset(bytecode->instrs, 0xFF, bytecode->instrs_capacity * sizeof(*bytecode->instrs));
+#endif
+
     bytecode->instrs_size = 0;
-    bytecode->instrs_capacity = 0;
-
     bytecode->params_size = 0;
-    bytecode->params_capacity = 0;
-
-    bytecode->stack_size = 0;
+    bytecode->stack_size  = 0;
 }
 
 void bytecode_free(struct Bytecode *bytecode) {
@@ -716,15 +729,7 @@ void bytecode_free(struct Bytecode *bytecode) {
     }
     free(bytecode->params);
 
-    bytecode->instrs = NULL;
-    bytecode->instrs_size = 0;
-    bytecode->instrs_capacity = 0;
-
-    bytecode->params = NULL;
-    bytecode->params_size = 0;
-    bytecode->params_capacity = 0;
-
-    bytecode->stack_size = 0;
+    *bytecode = (struct Bytecode)BYTECODE_INIT();
 }
 
 int *bytecode_alloc_params(const struct Bytecode *bytecode) {
@@ -884,9 +889,9 @@ void bytecode_print(const struct Bytecode *bytecode, FILE *stream) {
             instr_ptr += 1 + sizeof(addr);
             break;
 
-        case INSTR_JNP:
+        case INSTR_JZP:
             memcpy(&addr, instrs + instr_ptr + 1, sizeof(instr_ptr));
-            fprintf(stream, "%6" PRIuPTR ": jnp %" PRIuPTR "\n", instr_ptr, addr);
+            fprintf(stream, "%6" PRIuPTR ": jzp %" PRIuPTR "\n", instr_ptr, addr);
             instr_ptr += 1 + sizeof(addr);
             break;
 

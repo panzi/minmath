@@ -207,16 +207,18 @@ int main(int argc, char *argv[]) {
                             }
                         }
 
-                        bytecode_clear(&bytecode);
                         ast_free(opt_expr);
                     }
+
+                    bytecode_clear(&bytecode);
                 }
 
                 ast_free(expr);
             }
-            if (error_count > 0) {
-                return 1;
-            }
+            //if (error_count > 0) {
+            //    bytecode_free(&bytecode);
+            //    return 1;
+            //}
         }
     }
 
