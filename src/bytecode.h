@@ -43,14 +43,14 @@ enum Instr {
 
 struct Bytecode {
     uint8_t *instrs;
-    uint32_t instrs_size;
-    uint32_t instrs_capacity;
+    size_t instrs_size;
+    size_t instrs_capacity;
 
     char **params;
-    uint32_t params_size;
-    uint32_t params_capacity;
+    size_t params_size;
+    size_t params_capacity;
 
-    uint32_t stack_size;
+    size_t stack_size;
 };
 
 #define BYTECODE_INIT() {  \
@@ -69,7 +69,7 @@ bool bytecode_optimize(struct Bytecode *bytecode);
 int  bytecode_execute(const struct Bytecode *bytecode, const int *params, int *stack);
 void bytecode_free(struct Bytecode *bytecode);
 void bytecode_clear(struct Bytecode *bytecode);
-int32_t bytecode_get_param_index(const struct Bytecode *bytecode, const char *name);
+ptrdiff_t bytecode_get_param_index(const struct Bytecode *bytecode, const char *name);
 bool bytecode_set_param(const struct Bytecode *bytecode, int *params, const char *name, int value);
 int *bytecode_alloc_params(const struct Bytecode *bytecode);
 int *bytecode_alloc_stack(const struct Bytecode *bytecode);

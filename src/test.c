@@ -149,7 +149,9 @@ int main(int argc, char *argv[]) {
                         ++ error_count;
                     } else {
                         fputc('\n', stderr);
-                        fprintf(stderr, "Expression: %s\n", test->expr);
+                        fprintf(stderr, "Expression: %s\nOptimized Expression: ", test->expr);
+                        ast_print(stderr, opt_expr);
+                        fputc('\n', stderr);
                         bytecode_print(&bytecode, stderr);
                         if (!bytecode_optimize(&bytecode)) {
                             fprintf(stderr, "*** [%s] Error optimizing bytecode: %s\n", func->name, strerror(errno));
