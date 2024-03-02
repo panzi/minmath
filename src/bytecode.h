@@ -38,6 +38,8 @@ enum Instr {
     INSTR_JNZ, // jump if current value doesn't equal zero
     INSTR_JZP, // jump if current value equals zero and pop current value
     INSTR_POP,
+    INSTR_SET1,
+    INSTR_BOOL,
     INSTR_RET,
 };
 

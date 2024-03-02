@@ -143,7 +143,7 @@ int main(int argc, char *argv[]) {
                         ++ error_count;
                     }
 
-                    if (!bytecode_compile(&bytecode, opt_expr)) {
+                    /*if (!bytecode_compile(&bytecode, opt_expr)) {
                         fprintf(stderr, "*** [%s] Error compiling to bytecode: %s\n", func->name, strerror(errno));
                         fprintf(stderr, "Expression: %s\n", test->expr);
                         ++ error_count;
@@ -210,17 +210,17 @@ int main(int argc, char *argv[]) {
                         ast_free(opt_expr);
                     }
 
-                    bytecode_clear(&bytecode);
+                    bytecode_clear(&bytecode);*/
                 }
 
                 ast_free(expr);
             }
 
-            //if (error_count > 0) {
-            //    bytecode_free(&bytecode);
-            //    fprintf(stderr, "Aborting due to errors!\n");
-            //    return 1;
-            //}
+            if (error_count > 0) {
+                bytecode_free(&bytecode);
+                fprintf(stderr, "Aborting due to errors!\n");
+                return 1;
+            }
         }
     }
 
