@@ -692,6 +692,7 @@ int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *st
 
     JMP_LABEL(POP)
     -- stack_ptr;
+    ++ instr_ptr;
     NEXT_INSTR
 
     JMP_LABEL(RET)
