@@ -36,7 +36,7 @@ struct ParseFunc {
 
 const struct ParseFunc PARSE_FUNCS[] = {
     { "recursive descent", parse },
-    { "pratt", parse },
+    { "pratt", alt_parse },
     { NULL, NULL },
 };
 
@@ -122,8 +122,18 @@ int main(int argc, char *argv[]) {
                         fprintf(stderr, "    %s\n", *ptr);
                     }
                     fprintf(stderr,
-                        "Expression:\n    %s\nResult:\n    %d\nExpected:\n    %d\n\n",
-                        test->expr, result, test->result);
+                        "Expression:\n    %s\nParsed Expression:\n    ", test->expr);
+                    ast_print(stderr, expr);
+
+                    if (func->parse != parse) {
+                        fprintf(stderr, "\nRD Parser:\n    ");
+                        struct AstNode *expr2 = parse(test->expr, NULL);
+                        ast_print(stderr, expr2);
+                        ast_free(expr2);
+                    }
+
+                    fprintf(stderr, "\nResult:\n    %d\nExpected:\n    %d\n\n",
+                        result, test->result);
 
                     ++ error_count;
                 }
