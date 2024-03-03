@@ -14,7 +14,7 @@
 #include <sys/time.h>
 
 #define TS_TO_TV(TS) (struct timeval){ .tv_sec = (TS).tv_sec, .tv_usec = (TS).tv_nsec / 1000 }
-#define ITERS 1000
+#define ITERS 10000
 
 extern char **environ;
 
@@ -461,11 +461,10 @@ int main(int argc, char *argv[]) {
             int result = ast_execute(opt_item->expr);
             environ = environ_bakup;
 
-            // XXX: why does it fail now!?
             if (result != test->result) {
-                printf("%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
+                fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
+                return 1;
             }
-            assert(result == test->result);
         }
     }
     res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
@@ -486,7 +485,10 @@ int main(int argc, char *argv[]) {
             int result = ast_execute(opt_item->opt_expr);
             environ = environ_bakup;
 
-            assert(result == test->result);
+            if (result != test->result) {
+                fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
+                return 1;
+            }
         }
     }
     res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
@@ -504,7 +506,10 @@ int main(int argc, char *argv[]) {
 
             int result = bytecode_execute(&opt_item->bytecode, opt_item->params, opt_item->stack);
 
-            assert(result == test->result);
+            if (result != test->result) {
+                fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
+                return 1;
+            }
         }
     }
     res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
@@ -522,7 +527,10 @@ int main(int argc, char *argv[]) {
 
             int result = bytecode_execute(&opt_item->opt_bytecode, opt_item->params, opt_item->stack);
 
-            assert(result == test->result);
+            if (result != test->result) {
+                fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
+                return 1;
+            }
         }
     }
     res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
