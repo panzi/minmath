@@ -50,6 +50,7 @@ struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct
 
     if (token == TOK_QUEST) {
         // TODO: not sure if this is the right place
+        // XXX: it is not!
         next_token(&parser->tokenizer);
 
         size_t start_offset = parser->tokenizer.token_pos;
