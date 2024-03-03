@@ -297,7 +297,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "%zu errors!\n", error_count);
         return 1;
     }
-#if 0
+
     printf("Benchmarking parsing with %d iterations per expression:\n", ITERS);
 
     res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
@@ -368,7 +368,7 @@ int main(int argc, char *argv[]) {
 
     printf("\n");
     printf("pratt is %.2fx as fast\n\n", dbl_bench / dbl_alt_bench);
-#endif
+
     printf("Benchmarking execution with %d iterations per expression:\n", ITERS);
 
     size_t test_count = 0;
@@ -544,8 +544,8 @@ int main(int argc, char *argv[]) {
     free(opt_items);
 
     printf("Execution benchmark result:\n");
-    //printf("ast:                %zd.%06zu\n", (ssize_t)tv_bench_ast_execute.tv_sec, (size_t)tv_bench_ast_execute.tv_usec);
-    //printf("optimized ast:      %zd.%06zu\n", (ssize_t)tv_bench_opt_ast_execute.tv_sec, (size_t)tv_bench_opt_ast_execute.tv_usec);
+    printf("ast:                %zd.%06zu\n", (ssize_t)tv_bench_ast_execute.tv_sec, (size_t)tv_bench_ast_execute.tv_usec);
+    printf("optimized ast:      %zd.%06zu\n", (ssize_t)tv_bench_opt_ast_execute.tv_sec, (size_t)tv_bench_opt_ast_execute.tv_usec);
     printf("bytecode:           %zd.%06zu\n", (ssize_t)tv_bench_bytecode_execute.tv_sec, (size_t)tv_bench_bytecode_execute.tv_usec);
     printf("optimized bytecode: %zd.%06zu\n", (ssize_t)tv_bench_opt_bytecode_execute.tv_sec, (size_t)tv_bench_opt_bytecode_execute.tv_usec);
 
