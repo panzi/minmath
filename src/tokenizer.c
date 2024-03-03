@@ -56,6 +56,8 @@ const char *get_token_name(enum TokenType token) {
     case TOK_GE:           return ">=";
     case TOK_EQ:           return "==";
     case TOK_NE:           return "!=";
+    case TOK_LSHIFT:       return "<<";
+    case TOK_RSHIFT:       return ">>";
     default:
         assert(false);
         return "illegal token enum value";
@@ -167,6 +169,9 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
             if (tokenizer->input[tokenizer->input_pos] == '=') {
                 tokenizer->input_pos ++;
                 return tokenizer->token = TOK_LE;
+            } else if (tokenizer->input[tokenizer->input_pos] == '<') {
+                tokenizer->input_pos ++;
+                return tokenizer->token = TOK_LSHIFT;
             }
             return tokenizer->token = TOK_LT;
 
@@ -175,6 +180,9 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
             if (tokenizer->input[tokenizer->input_pos] == '=') {
                 tokenizer->input_pos ++;
                 return tokenizer->token = TOK_GE;
+            } else if (tokenizer->input[tokenizer->input_pos] == '>') {
+                tokenizer->input_pos ++;
+                return tokenizer->token = TOK_RSHIFT;
             }
             return tokenizer->token = TOK_GT;
 

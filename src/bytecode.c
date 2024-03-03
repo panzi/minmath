@@ -253,6 +253,18 @@ static ptrdiff_t bytecode_compile_ast(struct Bytecode *bytecode, const struct As
                 }
                 break;
 
+            case NODE_LSHIFT:
+                if (!bytecode_add_instr(bytecode, INSTR_LSHIFT, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
+
+            case NODE_RSHIFT:
+                if (!bytecode_add_instr(bytecode, INSTR_RSHIFT, ZERO_ARG)) {
+                    return -1;
+                }
+                break;
+
             default:
                 assert(false);
                 errno = EINVAL;
@@ -412,6 +424,8 @@ bool bytecode_optimize(struct Bytecode *bytecode) {
         case INSTR_BIT_NEG:
         case INSTR_NOT:
         case INSTR_BOOL:
+        case INSTR_LSHIFT:
+        case INSTR_RSHIFT:
         case INSTR_RET:
             ++ index;
             break;
@@ -521,6 +535,8 @@ int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *st
         [INSTR_JNZ]     = &&DO_JNZ,
         [INSTR_JZP]     = &&DO_JZP,
         [INSTR_BOOL]    = &&DO_BOOL,
+        [INSTR_LSHIFT]  = &&DO_LSHIFT,
+        [INSTR_RSHIFT]  = &&DO_RSHIFT,
         [INSTR_RET]     = &&DO_RET,
     };
 #endif
@@ -683,6 +699,18 @@ int bytecode_execute(const struct Bytecode *bytecode, const int *params, int *st
     JMP_LABEL(BOOL)
     stack[stack_ptr - 1] = stack[stack_ptr - 1] != 0;
     ++ instr_ptr;
+    NEXT_INSTR
+
+    JMP_LABEL(LSHIFT)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] <<= stack[stack_ptr];
+    NEXT_INSTR
+
+    JMP_LABEL(RSHIFT)
+    ++ instr_ptr;
+    -- stack_ptr;
+    stack[stack_ptr - 1] >>= stack[stack_ptr];
     NEXT_INSTR
 
     JMP_LABEL(RET)
@@ -934,6 +962,16 @@ void bytecode_print(const struct Bytecode *bytecode, FILE *stream) {
 
         case INSTR_BOOL:
             fprintf(stream, "%6" PRIuPTR ": bool\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_LSHIFT:
+            fprintf(stream, "%6" PRIuPTR ": lshift\n", instr_ptr);
+            ++ instr_ptr;
+            break;
+
+        case INSTR_RSHIFT:
+            fprintf(stream, "%6" PRIuPTR ": rshift\n", instr_ptr);
             ++ instr_ptr;
             break;
 

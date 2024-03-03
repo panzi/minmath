@@ -261,6 +261,8 @@ bool is_binary_operation(enum TokenType token) {
         case TOK_GE:
         case TOK_EQ:
         case TOK_NE:
+        case TOK_LSHIFT:
+        case TOK_RSHIFT:
             return true;
 
         default:
@@ -298,23 +300,27 @@ int get_precedence(enum NodeType type) {
         case NODE_GE:
             return 8;
 
+        case NODE_LSHIFT:
+        case NODE_RSHIFT:
+            return 9;
+
         case NODE_ADD:
         case NODE_SUB:
-            return 9;
+            return 10;
 
         case NODE_MUL:
         case NODE_DIV:
         case NODE_MOD:
-            return 10;
+            return 11;
 
         case NODE_NEG:
         case NODE_BIT_NEG:
         case NODE_NOT:
-            return 11;
+            return 12;
 
         case NODE_VAR:
         case NODE_INT:
-            return 12;
+            return 13;
 
         default:
             assert(false);
@@ -340,6 +346,8 @@ enum NodeType get_binary_node_type(enum TokenType token) {
         case TOK_GE:      return NODE_GE;
         case TOK_EQ:      return NODE_EQ;
         case TOK_NE:      return NODE_NE;
+        case TOK_LSHIFT:  return NODE_LSHIFT;
+        case TOK_RSHIFT:  return NODE_RSHIFT;
 
         default:
             assert(false);

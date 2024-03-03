@@ -71,10 +71,32 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                     break;
 
                 case NODE_DIV:
+                    if (rhs->data.value == 0) {
+                        struct AstNode *opt_expr = ast_create_binary(expr->type, lhs, rhs);
+
+                        if (opt_expr == NULL) {
+                            ast_free(lhs);
+                            ast_free(rhs);
+                            return NULL;
+                        }
+
+                        return opt_expr;
+                    }
                     lhs->data.value /= rhs->data.value;
                     break;
 
                 case NODE_MOD:
+                    if (rhs->data.value == 0) {
+                        struct AstNode *opt_expr = ast_create_binary(expr->type, lhs, rhs);
+
+                        if (opt_expr == NULL) {
+                            ast_free(lhs);
+                            ast_free(rhs);
+                            return NULL;
+                        }
+
+                        return opt_expr;
+                    }
                     lhs->data.value %= rhs->data.value;
                     break;
 
@@ -122,6 +144,14 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                     lhs->data.value ^= rhs->data.value;
                     break;
 
+                case NODE_LSHIFT:
+                    lhs->data.value <<= rhs->data.value;
+                    break;
+
+                case NODE_RSHIFT:
+                    lhs->data.value >>= rhs->data.value;
+                    break;
+
                 default:
                     assert(false);
                     ast_free(lhs);
@@ -151,12 +181,21 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
             }
 
             if (
-                (expr->type == NODE_ADD || expr->type == NODE_SUB || expr->type == NODE_BIT_OR) && rhs->type == NODE_INT && rhs->data.value == 0
+                (
+                    expr->type == NODE_ADD ||
+                    expr->type == NODE_SUB ||
+                    expr->type == NODE_BIT_OR ||
+                    expr->type == NODE_LSHIFT ||
+                    expr->type == NODE_RSHIFT
+                ) && rhs->type == NODE_INT && rhs->data.value == 0
             ) {
                 ast_free(rhs);
                 return lhs;
             } else if (
-                (expr->type == NODE_ADD || expr->type == NODE_BIT_OR) && lhs->type == NODE_INT && lhs->data.value == 0
+                (
+                    expr->type == NODE_ADD ||
+                    expr->type == NODE_BIT_OR
+                ) && lhs->type == NODE_INT && lhs->data.value == 0
             ) {
                 ast_free(lhs);
                 return rhs;
@@ -200,8 +239,17 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                 }
                 return opt_expr;
             } else if (
-                ((expr->type == NODE_MUL || expr->type == NODE_AND) && ((lhs->type == NODE_INT && lhs->data.value == 0) || (rhs->type == NODE_INT && rhs->data.value == 0))) ||
-                ((expr->type == NODE_DIV || expr->type == NODE_MOD) && lhs->type == NODE_INT && lhs->data.value == 0)
+                ((
+                    expr->type == NODE_MUL ||
+                    expr->type == NODE_AND
+                ) && (
+                    (lhs->type == NODE_INT && lhs->data.value == 0) ||
+                    (rhs->type == NODE_INT && rhs->data.value == 0)
+                )) ||
+                ((
+                    expr->type == NODE_DIV ||
+                    expr->type == NODE_MOD
+                ) && lhs->type == NODE_INT && lhs->data.value == 0)
             ) {
                 ast_free(lhs);
                 ast_free(rhs);

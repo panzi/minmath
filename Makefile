@@ -24,7 +24,7 @@ else
       CFLAGS += -g
 endif
 
-TESTDATA_CFLAGS = $(CFLAGS) -Wno-overflow -Wno-parentheses -Wno-logical-not-parentheses -Wno-bool-operation -Wno-div-by-zero
+TESTDATA_CFLAGS = $(CFLAGS) -O1 -Wno-overflow -Wno-parentheses -Wno-logical-not-parentheses -Wno-bool-operation -Wno-div-by-zero -Wno-shift-count-overflow -Wno-shift-overflow -Wno-shift-count-negative
 
 .PHONY: all clean test
 

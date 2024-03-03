@@ -24,6 +24,8 @@ bool ast_is_binary(const struct AstNode *expr) {
         case NODE_BIT_AND:
         case NODE_BIT_OR:
         case NODE_BIT_XOR:
+        case NODE_LSHIFT:
+        case NODE_RSHIFT:
             return true;
 
         default:
@@ -80,7 +82,9 @@ struct AstNode *ast_create_binary(enum NodeType type, struct AstNode *lhs, struc
         type == NODE_NE ||
         type == NODE_BIT_OR ||
         type == NODE_BIT_XOR ||
-        type == NODE_BIT_AND
+        type == NODE_BIT_AND ||
+        type == NODE_LSHIFT ||
+        type == NODE_RSHIFT
     );
 
     struct AstNode *node = AST_MALLOC();
@@ -170,6 +174,8 @@ void ast_free(struct AstNode *node) {
             case NODE_BIT_AND:
             case NODE_BIT_OR:
             case NODE_BIT_XOR:
+            case NODE_LSHIFT:
+            case NODE_RSHIFT:
                 ast_free(node->data.binary.lhs);
                 ast_free(node->data.binary.rhs);
                 break;
@@ -264,6 +270,14 @@ void ast_print(FILE *stream, const struct AstNode *expr) {
 
             case NODE_BIT_XOR:
                 fprintf(stream, " ^ ");
+                break;
+
+            case NODE_LSHIFT:
+                fprintf(stream, " << ");
+                break;
+
+            case NODE_RSHIFT:
+                fprintf(stream, " >> ");
                 break;
 
             default:
@@ -414,6 +428,18 @@ int ast_execute(struct AstNode *expr) {
         case NODE_BIT_XOR:
             return (
                 ast_execute(expr->data.binary.lhs) ^
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_LSHIFT:
+            return (
+                ast_execute(expr->data.binary.lhs) <<
+                ast_execute(expr->data.binary.rhs)
+            );
+
+        case NODE_RSHIFT:
+            return (
+                ast_execute(expr->data.binary.lhs) >>
                 ast_execute(expr->data.binary.rhs)
             );
 

@@ -32,6 +32,8 @@ enum NodeType {
     NODE_BIT_XOR,
     NODE_BIT_AND,
     NODE_BIT_NEG,
+    NODE_LSHIFT,
+    NODE_RSHIFT,
 };
 
 struct AstNode {

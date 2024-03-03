@@ -7,7 +7,7 @@ from random import randint, choice, random
 
 ident_start = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 ident_next  = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-bin_ops   = ["+", "-", "*", "/", "%", "<", ">", "<=", ">=", "==", "!=", "&", "|", "^", "&&", "||"]
+bin_ops   = ["+", "-", "*", "/", "%", "<", ">", "<=", ">=", "==", "!=", "&", "|", "^", "&&", "||", "<<", ">>"]
 unary_ops = "+-~!"
 whitespace = " \t\r\n\v"
 non_terneary = "buv0("
@@ -21,10 +21,10 @@ def gen_name():
         buf.append(choice(ident_next))
     return ''.join(buf)
 
-def gen_value():
-    if random() < 0.1:
+def gen_value(min: int = -0x8000_0000, max: int = 0x7fff_ffff):
+    if 0 >= min and 0 <= max and random() < 0.1:
         return 0
-    return randint(-0x8000_0000, 0x7fff_ffff)
+    return randint(min, max)
 
 def gen_whitespace():
     return ' '
@@ -64,7 +64,10 @@ class If(NamedTuple):
         return f'{self.cond}{gen_whitespace()}?{gen_whitespace()}{self.then_expr}{gen_whitespace()}:{gen_whitespace()}{self.else_expr}'
 
     def eval(self, vars: dict[str, int]) -> int:
-        return self.then_expr.eval(vars) if self.cond.eval(vars) else self.else_expr.eval(vars)
+        cond = self.cond.eval(vars)
+        then_res = self.then_expr.eval(vars)
+        else_res = self.else_expr.eval(vars)
+        return then_res if cond else else_res
 
     def c_expr(self, vars: dict[str, int]) -> str:
         return f'{self.cond.c_expr(vars)} ? {self.then_expr.c_expr(vars)} : {self.else_expr.c_expr(vars)}'
@@ -97,9 +100,13 @@ class BinOp(NamedTuple):
         elif op == '&':
             value = self.lhs.eval(vars) & self.rhs.eval(vars)
         elif op == '&&':
-            value = int(self.lhs.eval(vars) and self.rhs.eval(vars))
+            lhs = self.lhs.eval(vars)
+            rhs = self.rhs.eval(vars)
+            value = int(lhs and rhs)
         elif op == '||':
-            value = int(self.lhs.eval(vars) or self.rhs.eval(vars))
+            lhs = self.lhs.eval(vars)
+            rhs = self.rhs.eval(vars)
+            value = int(lhs or rhs)
         elif op == '<':
             value = int(self.lhs.eval(vars) < self.rhs.eval(vars))
         elif op == '>':
@@ -112,6 +119,16 @@ class BinOp(NamedTuple):
             value = int(self.lhs.eval(vars) == self.rhs.eval(vars))
         elif op == '!=':
             value = int(self.lhs.eval(vars) != self.rhs.eval(vars))
+        elif op == '<<':
+            rhs = self.rhs.eval(vars)
+            if rhs > 32 or rhs < 0:
+                raise ValueError('shift out of range')
+            value = int(self.lhs.eval(vars) << rhs)
+        elif op == '>>':
+            rhs = self.rhs.eval(vars)
+            if rhs > 32 or rhs < 0:
+                raise ValueError('shift out of range')
+            value = int(self.lhs.eval(vars) >> rhs)
         else:
             raise TypeError(f'illegal operator: {op}')
 
@@ -236,7 +253,7 @@ def gen_testcase():
     while True:
         vars: set[str] = set()
         environ: dict[str, int] = {}
-        expr = gen_expr(vars, 16)
+        expr = gen_expr(vars, 18)
         #print(expr)
         for var in vars:
             environ[var] = gen_value()
@@ -248,6 +265,10 @@ def gen_testcase():
                 expr.eval(environ)
             except ZeroDivisionError:
                 continue
+            except ValueError as exc:
+                if exc.args[0] == 'shift out of range':
+                    continue
+                raise
         result = expr.c_expr(environ)
         return TestCase(
             str_expr, environ, parse_ok, result

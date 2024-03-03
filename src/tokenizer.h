@@ -34,10 +34,12 @@ enum TokenType {
     TOK_OR      = ('|' << 8) | '|',
     TOK_LT      = '<',
     TOK_GT      = '>',
-    TOK_LE      = ('<' << 8 ) | '=',
-    TOK_GE      = ('>' << 8 ) | '=',
-    TOK_EQ      = ('=' << 8 ) | '=',
-    TOK_NE      = ('!' << 8 ) | '=',
+    TOK_LE      = ('<' << 8) | '=',
+    TOK_GE      = ('>' << 8) | '=',
+    TOK_EQ      = ('=' << 8) | '=',
+    TOK_NE      = ('!' << 8) | '=',
+    TOK_LSHIFT  = ('<' << 8) | '<',
+    TOK_RSHIFT  = ('>' << 8) | '>',
 };
 
 struct Tokenizer {

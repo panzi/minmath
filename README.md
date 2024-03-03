@@ -19,14 +19,15 @@ Syntax
 2. unary operations
 3. multiplication, division
 4. addition, subtraction
-5. ordered comparison
-6. equality comparison
-7. bitwise and
-8. bitwise xor
-9. bitwise or
-10. logical and
-11. logical or
-12. conditional expression
+5. bit-shift operations
+6. ordered comparison
+7. equality comparison
+8. bitwise and
+9. bitwise xor
+10. bitwise or
+11. logical and
+12. logical or
+13. conditional expression
 
 Operations of the same precedence are performed left to right.
 
@@ -37,6 +38,7 @@ Operations of the same precedence are performed left to right.
 - `&&`, `||`, `!`
 - `==`, `!=`
 - `<`, `>`, `<=`, `>=`
+- `<<`, `>>`
 - `(`, `)`,
 - `?`, `:`
 - integers
@@ -57,12 +59,13 @@ This is really all you need, no more head scratching than that.
 EXPRESSION := CONDITION
 CONDITION  := OR {"?" EXPRESSION ":" EXPRESSION}
 OR         := AND {"||" AND}
-AND        := COMPARE {"&&" COMPARE}
+AND        := BIT_OR {"&&" BIT_OR}
 BIT_OR     := BIT_XOR {"|" BIT_XOR}
 BIT_XOR    := BIT_AND {"^" BIT_AND}
 BIT_AND    := COMPARE {"&" COMPARE}
 COMPARE    := ORDER {("==" | "!=") ORDER}
-ORDER      := SUM {("<" | ">" | "<=" | ">=") SUM}
+ORDER      := BIT_SHIFT {("<" | ">" | "<=" | ">=") BIT_SHIFT}
+BIT_SHIFT  := SUM {("<<" | ">>") SUM}
 SUM        := PRODUCT {("+" | "-") PRODUCT}
 PRODUCT    := UNARY {("*" | "/" | "%") UNARY}
 UNARY      := {"+" | "-" | "~" | "!"} ATOM

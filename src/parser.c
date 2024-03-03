@@ -5,6 +5,7 @@ static struct AstNode *parse_or(struct Parser *parser);
 static struct AstNode *parse_and(struct Parser *parser);
 static struct AstNode *parse_compare(struct Parser *parser);
 static struct AstNode *parse_order(struct Parser *parser);
+static struct AstNode *parse_bit_shift(struct Parser *parser);
 static struct AstNode *parse_bit_or(struct Parser *parser);
 static struct AstNode *parse_bit_xor(struct Parser *parser);
 static struct AstNode *parse_bit_and(struct Parser *parser);
@@ -295,7 +296,7 @@ struct AstNode *parse_compare(struct Parser *parser) {
 }
 
 struct AstNode *parse_order(struct Parser *parser) {
-    struct AstNode *expr = parse_sum(parser);
+    struct AstNode *expr = parse_bit_shift(parser);
     if (expr == NULL) {
         return NULL;
     }
@@ -308,6 +309,42 @@ struct AstNode *parse_order(struct Parser *parser) {
             case TOK_GT: node_type = NODE_GT; break;
             case TOK_LE: node_type = NODE_LE; break;
             case TOK_GE: node_type = NODE_GE; break;
+            default:
+                return expr;
+        }
+
+        token = next_token(&parser->tokenizer);
+        struct AstNode *rhs = parse_bit_shift(parser);
+        if (rhs == NULL) {
+            ast_free(expr);
+            return NULL;
+        }
+
+        struct AstNode *new_expr = ast_create_binary(node_type, expr, rhs);
+        if (new_expr == NULL) {
+            parser->error.error  = PARSER_ERROR_MEMORY;
+            parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+            ast_free(expr);
+            ast_free(rhs);
+            return NULL;
+        }
+        expr = new_expr;
+    }
+    return expr;
+}
+
+struct AstNode *parse_bit_shift(struct Parser *parser) {
+    struct AstNode *expr = parse_sum(parser);
+    if (expr == NULL) {
+        return NULL;
+    }
+
+    for (;;) {
+        enum TokenType token = peek_token(&parser->tokenizer);
+        enum NodeType node_type;
+        switch (token) {
+            case TOK_LSHIFT: node_type = NODE_LSHIFT; break;
+            case TOK_RSHIFT: node_type = NODE_RSHIFT; break;
             default:
                 return expr;
         }
