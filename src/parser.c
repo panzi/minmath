@@ -18,7 +18,7 @@ void parser_free(struct Parser *parser) {
     tokenizer_free(&parser->tokenizer);
 }
 
-struct AstNode *parse_expression_from_string(const char *input, struct ErrorInfo *error) {
+struct AstNode *parse(const char *input, struct ErrorInfo *error) {
     struct Parser parser = PARSER_INIT(input);
     struct AstNode *expr = parse_expression(&parser);
     if (expr != NULL) {

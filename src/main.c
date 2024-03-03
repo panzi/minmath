@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 
-        expr = alt_parse_expression_from_string(source, &error);
+        expr = alt_parse(source, &error);
         if (expr != NULL) {
             int value = ast_execute(expr);
             printf("%s = %d\n", source, value);

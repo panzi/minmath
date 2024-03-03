@@ -24,7 +24,7 @@ void alt_parser_free(struct AltParser *parser) {
     tokenizer_free(&parser->tokenizer);
 }
 
-struct AstNode *alt_parse_expression_from_string(const char *input, struct ErrorInfo *error) {
+struct AstNode *alt_parse(const char *input, struct ErrorInfo *error) {
     struct AltParser parser = ALT_PARSER_INIT(input);
     struct AstNode *expr = alt_parse_expression(&parser, 0);
     if (expr != NULL) {

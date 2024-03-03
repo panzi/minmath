@@ -14,9 +14,20 @@
 #include <sys/time.h>
 
 #define TS_TO_TV(TS) (struct timeval){ .tv_sec = (TS).tv_sec, .tv_usec = (TS).tv_nsec / 1000 }
-#define ITERS 10000
+#define ITERS 1000
 
 extern char **environ;
+
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+
+struct OptItem {
+    struct AstNode *expr;
+    struct AstNode *opt_expr;
+    struct Bytecode bytecode;
+    struct Bytecode opt_bytecode;
+    int *params;
+    int *stack;
+};
 
 struct ParseFunc {
     const char *name;
@@ -24,8 +35,8 @@ struct ParseFunc {
 };
 
 const struct ParseFunc PARSE_FUNCS[] = {
-    { "recursive descent", parse_expression_from_string },
-    { "pratt", parse_expression_from_string },
+    { "recursive descent", parse },
+    { "pratt", parse },
     { NULL, NULL },
 };
 
@@ -276,13 +287,13 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "%zu errors!\n", error_count);
         return 1;
     }
-
+#if 0
     printf("Benchmarking parsing with %d iterations per expression:\n", ITERS);
 
     res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
     for (const struct TestCase *test = TESTS; test->expr; ++ test) {
         for (size_t iter = 0; iter < ITERS; ++ iter) {
-            struct AstNode *expr = parse_expression_from_string(test->expr, &error);
+            struct AstNode *expr = parse(test->expr, &error);
             if (expr == NULL) {
                 if (test->parse_ok) {
                     fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
@@ -311,7 +322,7 @@ int main(int argc, char *argv[]) {
     res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
     for (const struct TestCase *test = TESTS; test->expr; ++ test) {
         for (size_t iter = 0; iter < ITERS; ++ iter) {
-            struct AstNode *expr = alt_parse_expression_from_string(test->expr, &error);
+            struct AstNode *expr = alt_parse(test->expr, &error);
             if (expr == NULL) {
                 if (test->parse_ok) {
                     fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
@@ -338,7 +349,7 @@ int main(int argc, char *argv[]) {
     timersub(&tv_end, &tv_start, &tv_alt_bench);
 
     // TODO: devide by ITERS and number of tests
-    printf("Benchmark result:\n");
+    printf("Parser benchmark result:\n");
     printf("recursive descent: %zd.%06zu\n", (ssize_t)tv_bench.tv_sec,     (size_t)tv_bench.tv_usec);
     printf("pratt:             %zd.%06zu\n", (ssize_t)tv_alt_bench.tv_sec, (size_t)tv_alt_bench.tv_usec);
 
@@ -346,7 +357,188 @@ int main(int argc, char *argv[]) {
     double dbl_alt_bench = (double)tv_alt_bench.tv_sec + (double)tv_alt_bench.tv_usec / 1000000;
 
     printf("\n");
-    printf("pratt is %.2fx as fast\n", dbl_bench / dbl_alt_bench);
+    printf("pratt is %.2fx as fast\n\n", dbl_bench / dbl_alt_bench);
+#endif
+    printf("Benchmarking execution with %d iterations per expression:\n", ITERS);
+
+    size_t test_count = 0;
+    for (const struct TestCase *test = TESTS; test->expr; ++ test) {
+        ++ test_count;
+    }
+
+    // Benchmarking optimizations
+    struct OptItem *opt_items = calloc(test_count, sizeof(struct OptItem));
+    if (opt_items == NULL) {
+        perror("calloc(test_count, sizeof(struct OptItem))");
+        return 1;
+    }
+
+    for (size_t index = 0; index < test_count; ++ index) {
+        struct OptItem *opt_item = &opt_items[index];
+        const struct TestCase *test = &TESTS[index];
+
+        opt_item->expr = alt_parse(test->expr, NULL);
+        if (opt_item->expr == NULL) {
+            perror("alt_parse(test->expr, NULL)");
+            goto opt_init_loop_error;
+        }
+
+        opt_item->opt_expr = ast_optimize(opt_item->expr);
+        if (opt_item->opt_expr == NULL) {
+            perror("ast_optimize(test->expr)");
+            goto opt_init_loop_error;
+        }
+
+        if (!bytecode_compile(&opt_item->bytecode, opt_item->expr)) {
+            perror("bytecode_compile(&opt_item->bytecode, opt_item->expr)");
+            goto opt_init_loop_error;
+        }
+
+        if (!bytecode_clone(&opt_item->bytecode, &opt_item->opt_bytecode)) {
+            perror("bytecode_clone(&opt_item->bytecode, &opt_item->opt_bytecode)");
+            goto opt_init_loop_error;
+        }
+
+        if (!bytecode_optimize(&opt_item->opt_bytecode)) {
+            perror("bytecode_optimize(&opt_item->opt_bytecode)");
+            goto opt_init_loop_error;
+        }
+
+        opt_item->params = bytecode_alloc_params(&opt_item->bytecode);
+        if (opt_item->params == NULL) {
+            perror("bytecode_alloc_params(&opt_item->bytecode)");
+            goto opt_init_loop_error;
+        }
+
+        size_t stack_size = MAX(
+            opt_item->bytecode.stack_size,
+            opt_item->opt_bytecode.stack_size
+        );
+
+        opt_item->stack = calloc(stack_size, sizeof(uint8_t));
+        if (opt_item->stack == NULL) {
+            perror("calloc(stack_size, sizeof(int))");
+            goto opt_init_loop_error;
+        }
+
+        if (!params_from_environ(&opt_item->bytecode, opt_item->params, test->environ)) {
+            perror("params_from_environ(&opt_item->bytecode, opt_item->params, test->environ)");
+            goto opt_init_loop_error;
+        }
+
+        continue;
+    opt_init_loop_error:
+        for (size_t free_index = 0; free_index <= index; ++ free_index) {
+            ast_free(opt_item->expr);
+            ast_free(opt_item->opt_expr);
+            bytecode_free(&opt_item->bytecode);
+            bytecode_free(&opt_item->opt_bytecode);
+            free(opt_item->params);
+            free(opt_item->stack);
+        }
+        free(opt_items);
+        return 1;
+    }
+
+    res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    for (size_t index = 0; index < test_count; ++ index) {
+        for (size_t iter = 0; iter < ITERS; ++ iter) {
+            const struct TestCase *test = &TESTS[index];
+            struct OptItem *opt_item = &opt_items[index];
+
+            char **environ_bakup = environ;
+            environ = test->environ;
+            int result = ast_execute(opt_item->expr);
+            environ = environ_bakup;
+
+            // XXX: why does it fail now!?
+            if (result != test->result) {
+                printf("%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
+            }
+            assert(result == test->result);
+        }
+    }
+    res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+    assert(res_start == 0); (void)res_start;
+    assert(res_end == 0); (void)res_end;
+
+    struct timeval tv_bench_ast_execute;
+    timersub(&tv_end, &tv_start, &tv_bench_ast_execute);
+
+    res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    for (size_t index = 0; index < test_count; ++ index) {
+        for (size_t iter = 0; iter < ITERS; ++ iter) {
+            const struct TestCase *test = &TESTS[index];
+            struct OptItem *opt_item = &opt_items[index];
+
+            char **environ_bakup = environ;
+            environ = test->environ;
+            int result = ast_execute(opt_item->opt_expr);
+            environ = environ_bakup;
+
+            assert(result == test->result);
+        }
+    }
+    res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+    assert(res_start == 0); (void)res_start;
+    assert(res_end == 0); (void)res_end;
+
+    struct timeval tv_bench_opt_ast_execute;
+    timersub(&tv_end, &tv_start, &tv_bench_opt_ast_execute);
+
+    res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    for (size_t index = 0; index < test_count; ++ index) {
+        for (size_t iter = 0; iter < ITERS; ++ iter) {
+            const struct TestCase *test = &TESTS[index];
+            struct OptItem *opt_item = &opt_items[index];
+
+            int result = bytecode_execute(&opt_item->bytecode, opt_item->params, opt_item->stack);
+
+            assert(result == test->result);
+        }
+    }
+    res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+    assert(res_start == 0); (void)res_start;
+    assert(res_end == 0); (void)res_end;
+
+    struct timeval tv_bench_bytecode_execute;
+    timersub(&tv_end, &tv_start, &tv_bench_bytecode_execute);
+
+    res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    for (size_t index = 0; index < test_count; ++ index) {
+        for (size_t iter = 0; iter < ITERS; ++ iter) {
+            const struct TestCase *test = &TESTS[index];
+            struct OptItem *opt_item = &opt_items[index];
+
+            int result = bytecode_execute(&opt_item->opt_bytecode, opt_item->params, opt_item->stack);
+
+            assert(result == test->result);
+        }
+    }
+    res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+    assert(res_start == 0); (void)res_start;
+    assert(res_end == 0); (void)res_end;
+
+    struct timeval tv_bench_opt_bytecode_execute;
+    timersub(&tv_end, &tv_start, &tv_bench_opt_bytecode_execute);
+
+    for (size_t index = 0; index < test_count; ++ index) {
+        struct OptItem *opt_item = &opt_items[index];
+        ast_free(opt_item->expr);
+        ast_free(opt_item->opt_expr);
+        bytecode_free(&opt_item->bytecode);
+        bytecode_free(&opt_item->opt_bytecode);
+        free(opt_item->params);
+        free(opt_item->stack);
+    }
+    free(opt_items);
+
+    printf("Execution benchmark result:\n");
+    //printf("ast:                %zd.%06zu\n", (ssize_t)tv_bench_ast_execute.tv_sec, (size_t)tv_bench_ast_execute.tv_usec);
+    //printf("optimized ast:      %zd.%06zu\n", (ssize_t)tv_bench_opt_ast_execute.tv_sec, (size_t)tv_bench_opt_ast_execute.tv_usec);
+    printf("bytecode:           %zd.%06zu\n", (ssize_t)tv_bench_bytecode_execute.tv_sec, (size_t)tv_bench_bytecode_execute.tv_usec);
+    printf("optimized bytecode: %zd.%06zu\n", (ssize_t)tv_bench_opt_bytecode_execute.tv_sec, (size_t)tv_bench_opt_bytecode_execute.tv_usec);
+
 
     return 0;
 }

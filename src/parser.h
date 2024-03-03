@@ -25,7 +25,7 @@ struct Parser {
     },                                   \
 }
 
-struct AstNode *parse_expression_from_string(const char *input, struct ErrorInfo *error);
+struct AstNode *parse(const char *input, struct ErrorInfo *error);
 struct AstNode *parse_expression(struct Parser *parser);
 void parser_free(struct Parser *parser);
 

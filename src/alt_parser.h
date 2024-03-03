@@ -25,7 +25,7 @@ struct AltParser {
     },                                   \
 }
 
-struct AstNode *alt_parse_expression_from_string(const char *input, struct ErrorInfo *error);
+struct AstNode *alt_parse(const char *input, struct ErrorInfo *error);
 void alt_parser_free(struct AltParser *parser);
 
 #ifdef __cplusplus
