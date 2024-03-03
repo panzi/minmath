@@ -20,7 +20,7 @@ int main(int argc, char *argv[]) {
 #if 0
         expr = parse_expression_from_string(source, &error);
         if (expr != NULL) {
-            int value = ast_execute(expr);
+            int value = ast_execute_with_environ(expr);
             printf("%s = %d\n", source, value);
             ast_free(expr);
         } else {
@@ -31,12 +31,12 @@ int main(int argc, char *argv[]) {
 
         expr = alt_parse(source, &error);
         if (expr != NULL) {
-            int value = ast_execute(expr);
+            int value = ast_execute_with_environ(expr);
             printf("%s = %d\n", source, value);
 
             struct AstNode *opt_expr = ast_optimize(expr);
             if (opt_expr != NULL) {
-                int value = ast_execute(opt_expr);
+                int value = ast_execute_with_environ(opt_expr);
                 ast_print(stdout, opt_expr);
                 printf(" = %d\n", value);
                 ast_free(opt_expr);

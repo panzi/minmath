@@ -2,7 +2,10 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 #include <assert.h>
+#include <stdint.h>
+#include <errno.h>
 
 #define AST_MALLOC() malloc(sizeof(struct AstNode))
 
@@ -325,138 +328,173 @@ void ast_print(FILE *stream, const struct AstNode *expr) {
     }
 }
 
+int param_cmp(const void *lhs, const void *rhs) {
+    const struct Param *lparam = lhs;
+    const struct Param *rparam = rhs;
+    return strcmp(lparam->name, rparam->name);
+}
+
+void params_sort(struct Param params[], size_t param_count) {
+    qsort(params, param_count, sizeof(struct Param), param_cmp);
+}
+
+int params_get(const struct Param params[], size_t param_count, const char *name) {
+    size_t left  = 0;
+    size_t right = param_count;
+
+    while (left != right) {
+        // left + rigth can't overflow since sizeof(struct Param) > 1
+        size_t mid = (left + right) / 2;
+        int cmp = strcmp(name, params[mid].name);
+
+        if (cmp == 0) {
+            return params[mid].value;
+        }
+
+        if (cmp < 0) {
+            right = mid;
+        } else {
+            left = mid;
+        }
+    }
+
+    fprintf(stderr, "*** parameter not found: %s\n", name);
+    return 0;
+}
+
+
 // ========================================================================== //
 //                                                                            //
 //                             Tree Interpreter                               //
 //                                                                            //
 // ========================================================================== //
 
-int ast_execute(struct AstNode *expr) {
+int ast_execute_with_environ(struct AstNode *expr) {
     assert(expr != NULL);
 
     switch (expr->type) {
         case NODE_ADD:
             return (
-                ast_execute(expr->data.binary.lhs) +
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) +
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_SUB:
             return (
-                ast_execute(expr->data.binary.lhs) -
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) -
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_MUL:
             return (
-                ast_execute(expr->data.binary.lhs) *
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) *
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_DIV:
             return (
-                ast_execute(expr->data.binary.lhs) /
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) /
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_MOD:
             return (
-                ast_execute(expr->data.binary.lhs) %
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) %
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_AND:
             return (
-                ast_execute(expr->data.binary.lhs) &&
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) &&
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_OR:
             return (
-                ast_execute(expr->data.binary.lhs) ||
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) ||
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_LT:
             return (
-                ast_execute(expr->data.binary.lhs) <
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) <
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_GT:
             return (
-                ast_execute(expr->data.binary.lhs) >
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) >
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_LE:
             return (
-                ast_execute(expr->data.binary.lhs) <=
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) <=
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_GE:
             return (
-                ast_execute(expr->data.binary.lhs) >=
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) >=
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_EQ:
             return (
-                ast_execute(expr->data.binary.lhs) ==
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) ==
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_NE:
             return (
-                ast_execute(expr->data.binary.lhs) !=
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) !=
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_BIT_AND:
             return (
-                ast_execute(expr->data.binary.lhs) &
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) &
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_BIT_OR:
             return (
-                ast_execute(expr->data.binary.lhs) |
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) |
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_BIT_XOR:
             return (
-                ast_execute(expr->data.binary.lhs) ^
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) ^
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_LSHIFT:
             return (
-                ast_execute(expr->data.binary.lhs) <<
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) <<
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_RSHIFT:
             return (
-                ast_execute(expr->data.binary.lhs) >>
-                ast_execute(expr->data.binary.rhs)
+                ast_execute_with_environ(expr->data.binary.lhs) >>
+                ast_execute_with_environ(expr->data.binary.rhs)
             );
 
         case NODE_NEG:
-            return -ast_execute(expr->data.child);
+            return -ast_execute_with_environ(expr->data.child);
 
         case NODE_BIT_NEG:
-            return ~ast_execute(expr->data.child);
+            return ~ast_execute_with_environ(expr->data.child);
 
         case NODE_NOT:
-            return !ast_execute(expr->data.child);
+            return !ast_execute_with_environ(expr->data.child);
 
         case NODE_IF:
             return (
-                ast_execute(expr->data.terneary.cond) ?
-                ast_execute(expr->data.terneary.then_expr) :
-                ast_execute(expr->data.terneary.else_expr)
+                ast_execute_with_environ(expr->data.terneary.cond) ?
+                ast_execute_with_environ(expr->data.terneary.then_expr) :
+                ast_execute_with_environ(expr->data.terneary.else_expr)
             );
 
         case NODE_INT:
@@ -470,6 +508,146 @@ int ast_execute(struct AstNode *expr) {
             }
             return atoi(val);
         }
+        default:
+            assert(false);
+            return 0;
+    }
+}
+
+int ast_execute_with_params(struct AstNode *expr, const struct Param params[], size_t param_count) {
+    assert(expr != NULL);
+
+    switch (expr->type) {
+        case NODE_ADD:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) +
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_SUB:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) -
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_MUL:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) *
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_DIV:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) /
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_MOD:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) %
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_AND:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) &&
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_OR:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) ||
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_LT:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) <
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_GT:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) >
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_LE:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) <=
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_GE:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) >=
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_EQ:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) ==
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_NE:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) !=
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_BIT_AND:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) &
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_BIT_OR:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) |
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_BIT_XOR:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) ^
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_LSHIFT:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) <<
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_RSHIFT:
+            return (
+                ast_execute_with_params(expr->data.binary.lhs, params, param_count) >>
+                ast_execute_with_params(expr->data.binary.rhs, params, param_count)
+            );
+
+        case NODE_NEG:
+            return -ast_execute_with_params(expr->data.child, params, param_count);
+
+        case NODE_BIT_NEG:
+            return ~ast_execute_with_params(expr->data.child, params, param_count);
+
+        case NODE_NOT:
+            return !ast_execute_with_params(expr->data.child, params, param_count);
+
+        case NODE_IF:
+            return (
+                ast_execute_with_params(expr->data.terneary.cond, params, param_count) ?
+                ast_execute_with_params(expr->data.terneary.then_expr, params, param_count) :
+                ast_execute_with_params(expr->data.terneary.else_expr, params, param_count)
+            );
+
+        case NODE_INT:
+            return expr->data.value;
+
+        case NODE_VAR:
+            return params_get(params, param_count, expr->data.ident);
+
         default:
             assert(false);
             return 0;

@@ -54,6 +54,11 @@ struct AstNode {
     } data;
 };
 
+struct Param {
+    const char *name;
+    int value;
+};
+
 struct AstNode *ast_create_terneary(struct AstNode *cond, struct AstNode *then_expr, struct AstNode *else_expr);
 struct AstNode *ast_create_binary(enum NodeType type, struct AstNode *lhs, struct AstNode *rhs);
 struct AstNode *ast_create_unary(enum NodeType type, struct AstNode *child);
@@ -63,7 +68,13 @@ bool ast_is_binary(const struct AstNode *expr);
 bool ast_is_unary(const struct AstNode *expr);
 void ast_print(FILE *stream, const struct AstNode *expr);
 void ast_free(struct AstNode *node);
-int ast_execute(struct AstNode *expr);
+int ast_execute_with_environ(struct AstNode *expr);
+
+/// params need to be sorted
+int ast_execute_with_params(struct AstNode *expr, const struct Param params[], size_t param_count);
+
+void params_sort(struct Param params[], size_t param_count);
+int params_get(const struct Param params[], size_t param_count, const char *name);
 
 #ifdef __cplusplus
 }
