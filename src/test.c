@@ -197,17 +197,10 @@ int main(int argc, char *argv[]) {
         for (const struct TestCase *test = TESTS; test->expr; ++ test) {
             struct AstNode *expr = func->parse(test->expr, &error);
             if (expr == NULL) {
-                if (test->parse_ok) {
-                    fprintf(stderr, "*** [%s] Error parsing expression: \"%s\"\n", func->name, test->expr);
-                    print_parser_error(stderr, test->expr, &error, 1);
-                    ++ error_count;
-                }
+                fprintf(stderr, "*** [%s] Error parsing expression: \"%s\"\n", func->name, test->expr);
+                print_parser_error(stderr, test->expr, &error, 1);
+                ++ error_count;
             } else {
-                if (!test->parse_ok) {
-                    fprintf(stderr, "*** [%s] Expected error parsing expression, but was ok: \"%s\"\n", func->name, test->expr);
-                    ++ error_count;
-                }
-
                 // Test AST interpreter
                 char **environ_bakup = environ;
                 environ = test->environ;
@@ -447,17 +440,11 @@ int main(int argc, char *argv[]) {
         for (size_t iter = 0; iter < ITERS; ++ iter) {
             struct AstNode *expr = parse(test->expr, &error);
             if (expr == NULL) {
-                if (test->parse_ok) {
-                    fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
-                    print_parser_error(stderr, test->expr, &error, 1);
-                    return 1;
-                }
+                fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
+                print_parser_error(stderr, test->expr, &error, 1);
+                return 1;
             } else {
                 ast_free(expr);
-                if (!test->parse_ok) {
-                    fprintf(stderr, "*** Expected error parsing expression, but was ok: %s\n", test->expr);
-                    return 1;
-                }
             }
         }
     }
@@ -476,17 +463,11 @@ int main(int argc, char *argv[]) {
         for (size_t iter = 0; iter < ITERS; ++ iter) {
             struct AstNode *expr = alt_parse(test->expr, &error);
             if (expr == NULL) {
-                if (test->parse_ok) {
-                    fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
-                    print_parser_error(stderr, test->expr, &error, 1);
-                    return 1;
-                }
+                fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
+                print_parser_error(stderr, test->expr, &error, 1);
+                return 1;
             } else {
                 ast_free(expr);
-                if (!test->parse_ok) {
-                    fprintf(stderr, "*** Expected error parsing expression, but was ok: %s\n", test->expr);
-                    return 1;
-                }
             }
         }
     }

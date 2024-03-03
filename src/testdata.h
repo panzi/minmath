@@ -10,7 +10,6 @@ extern "C" {
 
 struct TestCase {
     const char *expr;
-    bool parse_ok;
     char **environ;
     int result;
 };

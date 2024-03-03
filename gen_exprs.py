@@ -237,7 +237,6 @@ def gen_expr(vars: set[str], size: int) -> Node:
 class TestCase(NamedTuple):
     expr: str
     environ: dict[str, int]
-    parse_ok: bool
     result: str
 
     def __str__(self):
@@ -246,9 +245,9 @@ class TestCase(NamedTuple):
             buf.append(f'"{key}={value}", ')
         buf.append("NULL}")
         environ = ''.join(buf)
-        str_parse_ok = 'true' if self.parse_ok else 'false'
-        return f'{{ "{self.expr}", {str_parse_ok}, {environ}, {self.result} }}'
+        return f'{{ "{self.expr}", {environ}, {self.result} }}'
 
+# TODO: negative examples
 def gen_testcase():
     while True:
         vars: set[str] = set()
@@ -258,20 +257,17 @@ def gen_testcase():
         for var in vars:
             environ[var] = gen_value()
         str_expr = str(expr)
-        parse_ok = True
-        # TODO: negative examples
-        if parse_ok:
-            try:
-                expr.eval(environ)
-            except ZeroDivisionError:
+        try:
+            expr.eval(environ)
+        except ZeroDivisionError:
+            continue
+        except ValueError as exc:
+            if exc.args[0] == 'shift out of range':
                 continue
-            except ValueError as exc:
-                if exc.args[0] == 'shift out of range':
-                    continue
-                raise
+            raise
         result = expr.c_expr(environ)
         return TestCase(
-            str_expr, environ, parse_ok, result
+            str_expr, environ, result
         )
 
 if __name__ == '__main__':
@@ -287,5 +283,5 @@ const struct TestCase TESTS[] = {''')
         test = gen_testcase()
         print(f'    {test},')
     print('''\
-    { NULL, false, NULL, -1 },
+    { NULL, NULL, 0 },
 };''')
