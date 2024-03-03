@@ -14,6 +14,7 @@
 #include <sys/time.h>
 
 #define TS_TO_TV(TS) (struct timeval){ .tv_sec = (TS).tv_sec, .tv_usec = (TS).tv_nsec / 1000 }
+#define TV_TO_DBL(TV) ((double)(TV).tv_sec + (double)(TV).tv_usec / 1000000)
 #define ITERS 10000
 
 extern char **environ;
@@ -23,10 +24,11 @@ extern char **environ;
 struct OptItem {
     struct AstNode *expr;
     struct AstNode *opt_expr;
+    struct Bytecode unopt_bytecode;
     struct Bytecode bytecode;
     struct Bytecode opt_bytecode;
+    int *unopt_params;
     int *params;
-    int *stack;
     struct Param *ast_params;
     size_t ast_params_size;
 };
@@ -53,10 +55,11 @@ static void ast_params_free(struct Param *params);
 void opt_item_free(struct OptItem *opt_item) {
     ast_free(opt_item->expr);
     ast_free(opt_item->opt_expr);
+    bytecode_free(&opt_item->unopt_bytecode);
     bytecode_free(&opt_item->bytecode);
     bytecode_free(&opt_item->opt_bytecode);
+    free(opt_item->unopt_params);
     free(opt_item->params);
-    free(opt_item->stack);
     ast_params_free(opt_item->ast_params);
 }
 
@@ -521,6 +524,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    size_t max_stack_size = 0;
     for (size_t index = 0; index < test_count; ++ index) {
         struct OptItem *opt_item = &opt_items[index];
         const struct TestCase *test = &TESTS[index];
@@ -537,8 +541,13 @@ int main(int argc, char *argv[]) {
             goto opt_init_loop_error;
         }
 
-        if (!bytecode_compile(&opt_item->bytecode, opt_item->expr)) {
-            perror("bytecode_compile(&opt_item->bytecode, opt_item->expr)");
+        if (!bytecode_compile(&opt_item->unopt_bytecode, opt_item->expr)) {
+            perror("bytecode_compile(&opt_item->unopt_bytecode, opt_item->expr)");
+            goto opt_init_loop_error;
+        }
+
+        if (!bytecode_compile(&opt_item->bytecode, opt_item->opt_expr)) {
+            perror("bytecode_compile(&opt_item->bytecode, opt_item->opt_expr)");
             goto opt_init_loop_error;
         }
 
@@ -552,20 +561,32 @@ int main(int argc, char *argv[]) {
             goto opt_init_loop_error;
         }
 
+        opt_item->unopt_params = bytecode_alloc_params(&opt_item->unopt_bytecode);
+        if (opt_item->unopt_params == NULL) {
+            perror("bytecode_alloc_params(&opt_item->unopt_bytecode)");
+            goto opt_init_loop_error;
+        }
+
         opt_item->params = bytecode_alloc_params(&opt_item->bytecode);
         if (opt_item->params == NULL) {
             perror("bytecode_alloc_params(&opt_item->bytecode)");
             goto opt_init_loop_error;
         }
 
-        size_t stack_size = MAX(
-            opt_item->bytecode.stack_size,
-            opt_item->opt_bytecode.stack_size
-        );
+        if (opt_item->unopt_bytecode.stack_size > max_stack_size) {
+            max_stack_size = opt_item->unopt_bytecode.stack_size;
+        }
 
-        opt_item->stack = calloc(stack_size, sizeof(uint8_t));
-        if (opt_item->stack == NULL) {
-            perror("calloc(stack_size, sizeof(int))");
+        if (opt_item->bytecode.stack_size > max_stack_size) {
+            max_stack_size = opt_item->bytecode.stack_size;
+        }
+
+        if (opt_item->opt_bytecode.stack_size > max_stack_size) {
+            max_stack_size = opt_item->opt_bytecode.stack_size;
+        }
+
+        if (!params_from_environ(&opt_item->unopt_bytecode, opt_item->unopt_params, test->environ)) {
+            perror("params_from_environ(&opt_item->unopt_bytecode, opt_item->unopt_params, test->environ)");
             goto opt_init_loop_error;
         }
 
@@ -587,6 +608,13 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    int *stack = calloc(max_stack_size, sizeof(int));
+    if (stack == NULL) {
+        perror("calloc(max_stack_size, sizeof(int))");
+        opt_items_free(opt_items, test_count);
+        return 1;
+    }
+
     // ast_execute_with_environ()
     res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
     for (size_t index = 0; index < test_count; ++ index) {
@@ -602,6 +630,7 @@ int main(int argc, char *argv[]) {
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
                 opt_items_free(opt_items, test_count);
+                free(stack);
                 return 1;
             }
         }
@@ -631,6 +660,7 @@ int main(int argc, char *argv[]) {
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
                 opt_items_free(opt_items, test_count);
+                free(stack);
                 return 1;
             }
         }
@@ -657,6 +687,7 @@ int main(int argc, char *argv[]) {
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
                 opt_items_free(opt_items, test_count);
+                free(stack);
                 return 1;
             }
         }
@@ -683,6 +714,7 @@ int main(int argc, char *argv[]) {
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
                 opt_items_free(opt_items, test_count);
+                free(stack);
                 return 1;
             }
         }
@@ -697,6 +729,33 @@ int main(int argc, char *argv[]) {
     struct timeval tv_bench_opt_ast_execute_with_params;
     timersub(&tv_end, &tv_start, &tv_bench_opt_ast_execute_with_params);
 
+    // bytecode_execute()
+    res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    for (size_t index = 0; index < test_count; ++ index) {
+        const struct TestCase *test = &TESTS[index];
+        struct OptItem *opt_item = &opt_items[index];
+
+        for (size_t iter = 0; iter < ITERS; ++ iter) {
+            int result = bytecode_execute(&opt_item->unopt_bytecode, opt_item->unopt_params, stack);
+
+            if (result != test->result) {
+                fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
+                opt_items_free(opt_items, test_count);
+                free(stack);
+                return 1;
+            }
+        }
+    }
+    res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+    assert(res_start == 0); (void)res_start;
+    assert(res_end == 0); (void)res_end;
+
+    tv_start = TS_TO_TV(ts_start);
+    tv_end = TS_TO_TV(ts_end);
+
+    struct timeval tv_bench_unopt_bytecode_execute;
+    timersub(&tv_end, &tv_start, &tv_bench_unopt_bytecode_execute);
+
     // ast_optimize() + bytecode_execute()
     res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
     for (size_t index = 0; index < test_count; ++ index) {
@@ -704,11 +763,12 @@ int main(int argc, char *argv[]) {
         struct OptItem *opt_item = &opt_items[index];
 
         for (size_t iter = 0; iter < ITERS; ++ iter) {
-            int result = bytecode_execute(&opt_item->bytecode, opt_item->params, opt_item->stack);
+            int result = bytecode_execute(&opt_item->bytecode, opt_item->params, stack);
 
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
                 opt_items_free(opt_items, test_count);
+                free(stack);
                 return 1;
             }
         }
@@ -730,11 +790,12 @@ int main(int argc, char *argv[]) {
         struct OptItem *opt_item = &opt_items[index];
 
         for (size_t iter = 0; iter < ITERS; ++ iter) {
-            int result = bytecode_execute(&opt_item->opt_bytecode, opt_item->params, opt_item->stack);
+            int result = bytecode_execute(&opt_item->opt_bytecode, opt_item->params, stack);
 
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", index, test->expr, result, test->result);
                 opt_items_free(opt_items, test_count);
+                free(stack);
                 return 1;
             }
         }
@@ -750,21 +811,24 @@ int main(int argc, char *argv[]) {
     timersub(&tv_end, &tv_start, &tv_bench_opt_bytecode_execute);
 
     opt_items_free(opt_items, test_count);
+    free(stack);
 
-    double dbl_ast_execute                 = (double)tv_bench_ast_execute.tv_sec                      + (double)tv_bench_ast_execute.tv_usec                      / 1000000;
-    double dbl_opt_ast_execute             = (double)tv_bench_opt_ast_execute.tv_sec                  + (double)tv_bench_opt_ast_execute.tv_usec                  / 1000000;
-    double dbl_ast_execute_with_params     = (double)tv_bench_ast_execute_with_params.tv_sec          + (double)tv_bench_ast_execute_with_params.tv_usec          / 1000000;
-    double dbl_opt_ast_execute_with_params = (double)tv_bench_opt_ast_execute_with_params.tv_sec      + (double)tv_bench_opt_ast_execute_with_params.tv_usec      / 1000000;
-    double dbl_bytecode_execute            = (double)tv_bench_bytecode_execute.tv_sec                 + (double)tv_bench_bytecode_execute.tv_usec                 / 1000000;
-    double dbl_opt_bytecode_execute        = (double)tv_bench_opt_bytecode_execute.tv_sec             + (double)tv_bench_opt_bytecode_execute.tv_usec             / 1000000;
+    double dbl_ast_execute                 = TV_TO_DBL(tv_bench_ast_execute);
+    double dbl_opt_ast_execute             = TV_TO_DBL(tv_bench_opt_ast_execute);
+    double dbl_ast_execute_with_params     = TV_TO_DBL(tv_bench_ast_execute_with_params);
+    double dbl_opt_ast_execute_with_params = TV_TO_DBL(tv_bench_opt_ast_execute_with_params);
+    double dbl_unopt_bytecode_execute      = TV_TO_DBL(tv_bench_unopt_bytecode_execute);
+    double dbl_bytecode_execute            = TV_TO_DBL(tv_bench_bytecode_execute);
+    double dbl_opt_bytecode_execute        = TV_TO_DBL(tv_bench_opt_bytecode_execute);
 
     printf("Execution benchmark result:\n");
-    printf("ast with environ:           %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_ast_execute.tv_sec,          (size_t)tv_bench_ast_execute.tv_usec,                      100.0 * dbl_ast_execute                 / dbl_ast_execute);
-    printf("optimized ast with environ: %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_opt_ast_execute.tv_sec,      (size_t)tv_bench_opt_ast_execute.tv_usec,                  100.0 * dbl_opt_ast_execute             / dbl_ast_execute);
-    printf("ast with params:            %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_ast_execute_with_params.tv_sec,          (size_t)tv_bench_ast_execute.tv_usec,          100.0 * dbl_ast_execute_with_params     / dbl_ast_execute);
-    printf("optimized ast with params:  %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_opt_ast_execute_with_params.tv_sec,      (size_t)tv_bench_opt_ast_execute.tv_usec,      100.0 * dbl_opt_ast_execute_with_params / dbl_ast_execute);
-    printf("bytecode:                   %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_bytecode_execute.tv_sec,     (size_t)tv_bench_bytecode_execute.tv_usec,                 100.0 * dbl_bytecode_execute            / dbl_ast_execute);
-    printf("optimized bytecode:         %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_opt_bytecode_execute.tv_sec, (size_t)tv_bench_opt_bytecode_execute.tv_usec,             100.0 * dbl_opt_bytecode_execute        / dbl_ast_execute);
+    printf("ast with environ:                 %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_ast_execute.tv_sec,                 (size_t)tv_bench_ast_execute.tv_usec,            100.0 * dbl_ast_execute                 / dbl_ast_execute);
+    printf("optimized ast with environ:       %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_opt_ast_execute.tv_sec,             (size_t)tv_bench_opt_ast_execute.tv_usec,        100.0 * dbl_opt_ast_execute             / dbl_ast_execute);
+    printf("ast with params:                  %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_ast_execute_with_params.tv_sec,     (size_t)tv_bench_ast_execute.tv_usec,            100.0 * dbl_ast_execute_with_params     / dbl_ast_execute);
+    printf("optimized ast with params:        %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_opt_ast_execute_with_params.tv_sec, (size_t)tv_bench_opt_ast_execute.tv_usec,        100.0 * dbl_opt_ast_execute_with_params / dbl_ast_execute);
+    printf("bytecode:                         %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_unopt_bytecode_execute.tv_sec,      (size_t)tv_bench_unopt_bytecode_execute.tv_usec, 100.0 * dbl_unopt_bytecode_execute      / dbl_ast_execute);
+    printf("optimized ast+bytecode:           %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_bytecode_execute.tv_sec,            (size_t)tv_bench_bytecode_execute.tv_usec,       100.0 * dbl_bytecode_execute            / dbl_ast_execute);
+    printf("optimized ast+optimized bytecode: %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_opt_bytecode_execute.tv_sec,        (size_t)tv_bench_opt_bytecode_execute.tv_usec,   100.0 * dbl_opt_bytecode_execute        / dbl_ast_execute);
 
     return 0;
 }
