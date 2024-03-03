@@ -1,5 +1,6 @@
-#include "parser.h"
+// #include "parser.h"
 #include "alt_parser.h"
+#include "optimizer.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -32,6 +33,18 @@ int main(int argc, char *argv[]) {
         if (expr != NULL) {
             int value = ast_execute(expr);
             printf("%s = %d\n", source, value);
+
+            struct AstNode *opt_expr = ast_optimize(expr);
+            if (opt_expr != NULL) {
+                int value = ast_execute(opt_expr);
+                ast_print(stdout, opt_expr);
+                printf(" = %d\n", value);
+                ast_free(opt_expr);
+            } else {
+                print_parser_error(stderr, source, &error, 3);
+                status = 1;
+            }
+
             ast_free(expr);
         } else {
             print_parser_error(stderr, source, &error, 3);

@@ -42,6 +42,19 @@ static inline struct AstNode *ast_create_bool(struct AstNode *child) {
     return bool2;
 }
 
+static inline int factor_to_shift_count(int factor) {
+    for (int bit_pos = 0; bit_pos < 32; ++ bit_pos) {
+        if (factor & (1 << bit_pos)) {
+            if (factor & ~(1 << bit_pos)) {
+                return 0;
+            } else {
+                return bit_pos;
+            }
+        }
+    }
+    return 0;
+}
+
 // This optimizer just does simple constant folding.
 struct AstNode *ast_optimize(const struct AstNode *expr) {
     assert(expr != NULL);
@@ -180,6 +193,7 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                 }
             }
 
+            int bit_shift;
             if (
                 (
                     expr->type == NODE_ADD ||
@@ -273,6 +287,55 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                     ast_free(lhs);
                     return NULL;
                 }
+                return opt_expr;
+            } else if (
+                (expr->type == NODE_MUL || expr->type == NODE_DIV) && rhs->type == NODE_INT && rhs->data.value == 1
+            ) {
+                ast_free(rhs);
+                return lhs;
+            } else if (
+                expr->type == NODE_MUL && lhs->type == NODE_INT && lhs->data.value == 1
+            ) {
+                ast_free(lhs);
+                return rhs;
+            } else if (
+                expr->type == NODE_MUL && rhs->type == NODE_INT && (bit_shift = factor_to_shift_count(rhs->data.value)) > 0
+            ) {
+                rhs->data.value = bit_shift;
+                struct AstNode *opt_expr = ast_create_binary(NODE_LSHIFT, lhs, rhs);
+
+                if (opt_expr == NULL) {
+                    ast_free(lhs);
+                    ast_free(rhs);
+                    return NULL;
+                }
+
+                return opt_expr;
+            } else if (
+                expr->type == NODE_MUL && lhs->type == NODE_INT && (bit_shift = factor_to_shift_count(lhs->data.value)) > 0
+            ) {
+                lhs->data.value = bit_shift;
+                struct AstNode *opt_expr = ast_create_binary(NODE_LSHIFT, rhs, lhs);
+
+                if (opt_expr == NULL) {
+                    ast_free(lhs);
+                    ast_free(rhs);
+                    return NULL;
+                }
+
+                return opt_expr;
+            } else if (
+                expr->type == NODE_DIV && rhs->type == NODE_INT && (bit_shift = factor_to_shift_count(rhs->data.value)) > 0
+            ) {
+                rhs->data.value = bit_shift;
+                struct AstNode *opt_expr = ast_create_binary(NODE_RSHIFT, lhs, rhs);
+
+                if (opt_expr == NULL) {
+                    ast_free(lhs);
+                    ast_free(rhs);
+                    return NULL;
+                }
+
                 return opt_expr;
             } else {
                 struct AstNode *opt_expr = ast_create_binary(expr->type, lhs, rhs);
