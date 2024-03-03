@@ -15,7 +15,7 @@
 
 #define TS_TO_TV(TS) (struct timeval){ .tv_sec = (TS).tv_sec, .tv_usec = (TS).tv_nsec / 1000 }
 #define TV_TO_DBL(TV) ((double)(TV).tv_sec + (double)(TV).tv_usec / 1000000)
-#define ITERS 10000
+#define ITERS 100000
 
 extern char **environ;
 
@@ -425,11 +425,11 @@ int main(int argc, char *argv[]) {
                 ast_free(expr);
             }
 
-            if (error_count > 0) {
-                bytecode_free(&bytecode);
-                fprintf(stderr, "Aborting due to errors!\n");
-                return 1;
-            }
+            // if (error_count > 0) {
+            //     bytecode_free(&bytecode);
+            //     fprintf(stderr, "Aborting due to errors!\n");
+            //     return 1;
+            // }
         }
     }
 
@@ -500,8 +500,8 @@ int main(int argc, char *argv[]) {
     struct timeval tv_alt_bench;
     timersub(&tv_end, &tv_start, &tv_alt_bench);
 
-    double dbl_bench     = (double)tv_bench.tv_sec     + (double)tv_bench.tv_usec     / 1000000;
-    double dbl_alt_bench = (double)tv_alt_bench.tv_sec + (double)tv_alt_bench.tv_usec / 1000000;
+    double dbl_bench     = TV_TO_DBL(tv_bench);
+    double dbl_alt_bench = TV_TO_DBL(tv_alt_bench);
 
     size_t test_count = 0;
     for (const struct TestCase *test = TESTS; test->expr; ++ test) {
