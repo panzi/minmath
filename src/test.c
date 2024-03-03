@@ -38,8 +38,8 @@ struct ParseFunc {
 };
 
 const struct ParseFunc PARSE_FUNCS[] = {
-    { "recursive descent", parse },
-    { "pratt", alt_parse },
+    { "Recursive Descent", parse },
+    { "Pratt", alt_parse },
     { NULL, NULL },
 };
 
@@ -193,7 +193,7 @@ int main(int argc, char *argv[]) {
     struct Bytecode bytecode = BYTECODE_INIT();
 
     for (const struct ParseFunc *func = PARSE_FUNCS; func->name; ++ func) {
-        printf("Testing %s\n", func->name);
+        printf("Testing with %s parser...\n", func->name);
         for (const struct TestCase *test = TESTS; test->expr; ++ test) {
             struct AstNode *expr = func->parse(test->expr, &error);
             if (expr == NULL) {
@@ -439,7 +439,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    printf("Benchmarking parsing with %d iterations per expression:\n", ITERS);
+    printf("\nBenchmarking parsing with %d iterations per expression:\n\n", ITERS);
 
     res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
     for (const struct TestCase *test = TESTS; test->expr; ++ test) {
@@ -502,20 +502,19 @@ int main(int argc, char *argv[]) {
     double dbl_bench     = (double)tv_bench.tv_sec     + (double)tv_bench.tv_usec     / 1000000;
     double dbl_alt_bench = (double)tv_alt_bench.tv_sec + (double)tv_alt_bench.tv_usec / 1000000;
 
-    // TODO: devide by ITERS and number of tests
-    printf("Parser benchmark result:\n");
-    printf("recursive descent: %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench.tv_sec,     (size_t)tv_bench.tv_usec,     100.0 * dbl_bench     / dbl_bench);
-    printf("pratt:             %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_alt_bench.tv_sec, (size_t)tv_alt_bench.tv_usec, 100.0 * dbl_alt_bench / dbl_bench);
-
-    printf("\n");
-    printf("pratt is %.2fx as fast\n\n", dbl_bench / dbl_alt_bench);
-
-    printf("Benchmarking execution with %d iterations per expression:\n", ITERS);
-
     size_t test_count = 0;
     for (const struct TestCase *test = TESTS; test->expr; ++ test) {
         ++ test_count;
     }
+
+    printf("Parser benchmark result:\n");
+    printf("Recursive Descent: %zd.%06zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%\n", (ptrdiff_t)tv_bench.tv_sec,     (size_t)tv_bench.tv_usec,     dbl_bench     * 1000 / ITERS, dbl_bench     * 1000 / test_count, 100.0 * dbl_bench     / dbl_bench);
+    printf("Pratt:             %zd.%06zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%\n", (ptrdiff_t)tv_alt_bench.tv_sec, (size_t)tv_alt_bench.tv_usec, dbl_alt_bench * 1000 / ITERS, dbl_alt_bench * 1000 / test_count, 100.0 * dbl_alt_bench / dbl_bench);
+
+    printf("\n");
+    printf("Pratt is %.2fx as fast\n\n", dbl_bench / dbl_alt_bench);
+
+    printf("Benchmarking execution with %d iterations per expression:\n\n", ITERS);
 
     // Benchmarking optimizations
     struct OptItem *opt_items = calloc(test_count, sizeof(struct OptItem));
@@ -822,13 +821,13 @@ int main(int argc, char *argv[]) {
     double dbl_opt_bytecode_execute        = TV_TO_DBL(tv_bench_opt_bytecode_execute);
 
     printf("Execution benchmark result:\n");
-    printf("ast with environ:                 %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_ast_execute.tv_sec,                 (size_t)tv_bench_ast_execute.tv_usec,            100.0 * dbl_ast_execute                 / dbl_ast_execute);
-    printf("optimized ast with environ:       %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_opt_ast_execute.tv_sec,             (size_t)tv_bench_opt_ast_execute.tv_usec,        100.0 * dbl_opt_ast_execute             / dbl_ast_execute);
-    printf("ast with params:                  %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_ast_execute_with_params.tv_sec,     (size_t)tv_bench_ast_execute.tv_usec,            100.0 * dbl_ast_execute_with_params     / dbl_ast_execute);
-    printf("optimized ast with params:        %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_opt_ast_execute_with_params.tv_sec, (size_t)tv_bench_opt_ast_execute.tv_usec,        100.0 * dbl_opt_ast_execute_with_params / dbl_ast_execute);
-    printf("bytecode:                         %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_unopt_bytecode_execute.tv_sec,      (size_t)tv_bench_unopt_bytecode_execute.tv_usec, 100.0 * dbl_unopt_bytecode_execute      / dbl_ast_execute);
-    printf("optimized ast+bytecode:           %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_bytecode_execute.tv_sec,            (size_t)tv_bench_bytecode_execute.tv_usec,       100.0 * dbl_bytecode_execute            / dbl_ast_execute);
-    printf("optimized ast+optimized bytecode: %zd.%06zu sec  %6.2lf %%\n", (ssize_t)tv_bench_opt_bytecode_execute.tv_sec,        (size_t)tv_bench_opt_bytecode_execute.tv_usec,   100.0 * dbl_opt_bytecode_execute        / dbl_ast_execute);
+    printf("ast with environ:                 %zd.%06zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%\n", (ptrdiff_t)tv_bench_ast_execute.tv_sec,                 (size_t)tv_bench_ast_execute.tv_usec,            dbl_ast_execute                 * 1000 / ITERS, dbl_ast_execute                 * 1000 / test_count, 100.0 * dbl_ast_execute                 / dbl_ast_execute);
+    printf("optimized ast with environ:       %zd.%06zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%\n", (ptrdiff_t)tv_bench_opt_ast_execute.tv_sec,             (size_t)tv_bench_opt_ast_execute.tv_usec,        dbl_opt_ast_execute             * 1000 / ITERS, dbl_opt_ast_execute             * 1000 / test_count, 100.0 * dbl_opt_ast_execute             / dbl_ast_execute);
+    printf("ast with params:                  %zd.%06zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%\n", (ptrdiff_t)tv_bench_ast_execute_with_params.tv_sec,     (size_t)tv_bench_ast_execute.tv_usec,            dbl_ast_execute_with_params     * 1000 / ITERS, dbl_ast_execute_with_params     * 1000 / test_count, 100.0 * dbl_ast_execute_with_params     / dbl_ast_execute);
+    printf("optimized ast with params:        %zd.%06zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%\n", (ptrdiff_t)tv_bench_opt_ast_execute_with_params.tv_sec, (size_t)tv_bench_opt_ast_execute.tv_usec,        dbl_opt_ast_execute_with_params * 1000 / ITERS, dbl_opt_ast_execute_with_params * 1000 / test_count, 100.0 * dbl_opt_ast_execute_with_params / dbl_ast_execute);
+    printf("bytecode:                         %zd.%06zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%\n", (ptrdiff_t)tv_bench_unopt_bytecode_execute.tv_sec,      (size_t)tv_bench_unopt_bytecode_execute.tv_usec, dbl_unopt_bytecode_execute      * 1000 / ITERS, dbl_unopt_bytecode_execute      * 1000 / test_count, 100.0 * dbl_unopt_bytecode_execute      / dbl_ast_execute);
+    printf("optimized ast+bytecode:           %zd.%06zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%\n", (ptrdiff_t)tv_bench_bytecode_execute.tv_sec,            (size_t)tv_bench_bytecode_execute.tv_usec,       dbl_bytecode_execute            * 1000 / ITERS, dbl_bytecode_execute            * 1000 / test_count, 100.0 * dbl_bytecode_execute            / dbl_ast_execute);
+    printf("optimized ast+optimized bytecode: %zd.%06zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%\n", (ptrdiff_t)tv_bench_opt_bytecode_execute.tv_sec,        (size_t)tv_bench_opt_bytecode_execute.tv_usec,   dbl_opt_bytecode_execute        * 1000 / ITERS, dbl_opt_bytecode_execute        * 1000 / test_count, 100.0 * dbl_opt_bytecode_execute        / dbl_ast_execute);
 
     return 0;
 }
