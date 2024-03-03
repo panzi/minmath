@@ -64,7 +64,7 @@ void opt_item_free(struct OptItem *opt_item) {
 }
 
 void opt_items_free(struct OptItem *opt_items, size_t count) {
-    for (size_t index = 0; index <= count; ++ index) {
+    for (size_t index = 0; index < count; ++ index) {
         opt_item_free(&opt_items[index]);
     }
     free(opt_items);
@@ -238,17 +238,17 @@ int main(int argc, char *argv[]) {
                     ++ error_count;
                 }
 
-                struct Param *params = ast_params_from_environ(test->environ);
-                size_t params_size = ast_params_len(params);
-                if (params == NULL) {
+                struct Param *ast_params = ast_params_from_environ(test->environ);
+                size_t ast_params_size = ast_params_len(ast_params);
+                if (ast_params == NULL) {
                     fprintf(stderr, "[%s] Error creating ast params: %s\n", func->name, strerror(errno));
                     ++ error_count;
                 } else {
-                    int result = ast_execute_with_params(expr, params, params_size);
+                    int result = ast_execute_with_params(expr, ast_params, ast_params_size);
 
                     if (result != test->result) {
                         fprintf(stderr, "*** [%s] Result missmatch of ast_execute_with_params():\nParameters:\n", func->name);
-                        for (const struct Param *param = params; param->name; ++ param) {
+                        for (const struct Param *param = ast_params; param->name; ++ param) {
                             fprintf(stderr, "    %s = %d\n", param->name, param->value);
                         }
                         fprintf(stderr,
@@ -341,12 +341,12 @@ int main(int argc, char *argv[]) {
                         ++ error_count;
                     }
 
-                    if (params != NULL) {
-                        int result = ast_execute_with_params(expr, params, params_size);
+                    if (ast_params != NULL) {
+                        int result = ast_execute_with_params(expr, ast_params, ast_params_size);
 
                         if (result != test->result) {
                             fprintf(stderr, "*** [%s] Optimized result missmatch of ast_execute_with_params():\nParameters:\n", func->name);
-                            for (const struct Param *param = params; param->name; ++ param) {
+                            for (const struct Param *param = ast_params; param->name; ++ param) {
                                 fprintf(stderr, "    %s = %d\n", param->name, param->value);
                             }
                             fprintf(stderr,
@@ -421,6 +421,7 @@ int main(int argc, char *argv[]) {
                     ast_free(opt_expr);
                 }
 
+                ast_params_free(ast_params);
                 ast_free(expr);
             }
 

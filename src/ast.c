@@ -362,7 +362,6 @@ int params_get(const struct Param params[], size_t param_count, const char *name
     return 0;
 }
 
-
 // ========================================================================== //
 //                                                                            //
 //                             Tree Interpreter                               //
