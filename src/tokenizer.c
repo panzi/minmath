@@ -83,12 +83,20 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
         tokenizer->ident = NULL;
     }
 
+    // One could cache fields of the tokenizer as locals like this and only
+    // update them on return, but apparently the compiler does that already
+    // bettern than doing it manually:
+    // size_t nput_pos = tokenizer->input_pos;
+    // const char *input = tokenizer->input;
+
     char ch = tokenizer->input[tokenizer->input_pos];
 
     // skip whitespace and comments
     for (;;) {
         // skip whitespace
-        while (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\v') {
+        // no decernable speed difference between these two ways of writing this condition
+        while (ch == ' ' || (ch >= '\t' && ch <= '\r')) {
+        // while (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\v' || ch == '\f' || ch == '\r') {
             tokenizer->input_pos ++;
             ch = tokenizer->input[tokenizer->input_pos];
         }
