@@ -1,42 +1,57 @@
 CC = gcc
-SHARED_OBJ = build/alt_parser.o \
-             build/ast.o \
-             build/parser.o \
-             build/tokenizer.o \
-             build/parser_error.o \
-             build/optimizer.o \
-             build/bytecode.o
-OBJ = $(SHARED_OBJ) \
-      build/main.o
-TEST_OBJ = $(SHARED_OBJ) \
-           build/testdata.o \
-           build/test.o
-ALL_OBJ = $(TEST_OBJ) \
-          build/main.o
-BIN = build/minmath
-TEST_BIN = build/minmath_test
-CFLAGS = -Wall -Werror -std=gnu11
-RELEASE = 0
 
-ifeq ($(RELEASE),1)
-      CFLAGS += -O3 -DNDEBUG
+SHARED_CFLAGS = -Wall -Werror -std=gnu11
+DEBUG_CFLAGS = $(SHARED_CFLAGS) -g
+TEST_CFLAGS = $(SHARED_CFLAGS) -O3 -DNDEBUG -g
+RELEASE_CFLAGS = $(SHARED_CFLAGS) -O3 -DNDEBUG
+CFLAGS ?= $(DEBUG_CFLAGS)
+
+BUILD_TYPE ?= debug
+
+.PHONY: all clean test perf
+
+ifeq ($(BUILD_TYPE),release)
+      CFLAGS = $(RELEASE_CFLAGS)
 else
-      CFLAGS += -g
+ifeq ($(BUILD_TYPE),test)
+      CFLAGS = $(TEST_CFLAGS)
+else
+      CFLAGS = $(DEBUG_CFLAGS)
+endif
 endif
 
-TESTDATA_CFLAGS = $(CFLAGS) -O1 -Wno-overflow -Wno-parentheses -Wno-logical-not-parentheses -Wno-bool-operation -Wno-div-by-zero -Wno-shift-count-overflow -Wno-shift-overflow -Wno-shift-count-negative
+SHARED_OBJ = build/$(BUILD_TYPE)/alt_parser.o \
+             build/$(BUILD_TYPE)/ast.o \
+             build/$(BUILD_TYPE)/parser.o \
+             build/$(BUILD_TYPE)/tokenizer.o \
+             build/$(BUILD_TYPE)/parser_error.o \
+             build/$(BUILD_TYPE)/optimizer.o \
+             build/$(BUILD_TYPE)/bytecode.o
+OBJ = $(SHARED_OBJ) \
+      build/$(BUILD_TYPE)/main.o
+TEST_OBJ = $(SHARED_OBJ) \
+           build/$(BUILD_TYPE)/testdata.o \
+           build/$(BUILD_TYPE)/test.o
+ALL_OBJ = $(TEST_OBJ) \
+          build/$(BUILD_TYPE)/main.o
+BIN = build/$(BUILD_TYPE)/minmath
+TEST_BIN = build/$(BUILD_TYPE)/minmath_test
 
-.PHONY: all clean test
+TESTDATA_CFLAGS = $(CFLAGS) -O1 -Wno-overflow -Wno-parentheses -Wno-logical-not-parentheses -Wno-bool-operation -Wno-div-by-zero -Wno-shift-count-overflow -Wno-shift-overflow -Wno-shift-count-negative
 
 all: $(BIN)
 
 test: $(TEST_BIN)
 	$(TEST_BIN)
 
-build/testdata.o: src/testdata.c
+perf: $(TEST_BIN)
+	perf record $(TEST_BIN)
+	perf report
+
+build/$(BUILD_TYPE)/testdata.o: src/testdata.c
 	$(CC) $(TESTDATA_CFLAGS) $< -c -o $@
 
-build/%.o: src/%.c
+build/$(BUILD_TYPE)/%.o: src/%.c
 	$(CC) $(CFLAGS) $< -c -o $@
 
 $(BIN): $(OBJ)
