@@ -166,10 +166,11 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
 
         case '<':
             tokenizer->input_pos ++;
-            if (tokenizer->input[tokenizer->input_pos] == '=') {
+            ch = tokenizer->input[tokenizer->input_pos];
+            if (ch == '=') {
                 tokenizer->input_pos ++;
                 return tokenizer->token = TOK_LE;
-            } else if (tokenizer->input[tokenizer->input_pos] == '<') {
+            } else if (ch == '<') {
                 tokenizer->input_pos ++;
                 return tokenizer->token = TOK_LSHIFT;
             }
@@ -177,10 +178,11 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
 
         case '>':
             tokenizer->input_pos ++;
-            if (tokenizer->input[tokenizer->input_pos] == '=') {
+            ch = tokenizer->input[tokenizer->input_pos];
+            if (ch == '=') {
                 tokenizer->input_pos ++;
                 return tokenizer->token = TOK_GE;
-            } else if (tokenizer->input[tokenizer->input_pos] == '>') {
+            } else if (ch == '>') {
                 tokenizer->input_pos ++;
                 return tokenizer->token = TOK_RSHIFT;
             }
