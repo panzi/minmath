@@ -25,8 +25,8 @@ struct AltParser {
     },                                   \
 }
 
-struct AstNode *alt_parse(const char *input, struct ErrorInfo *error);
-void alt_parser_free(struct AltParser *parser);
+struct AstNode *fast_parse(const char *input, struct ErrorInfo *error);
+void fast_parser_free(struct AltParser *parser);
 
 #ifdef __cplusplus
 }

@@ -1,6 +1,6 @@
 #include "testdata.h"
 #include "parser.h"
-#include "alt_parser.h"
+#include "fast_parser.h"
 #include "optimizer.h"
 #include "bytecode.h"
 
@@ -39,7 +39,7 @@ struct ParseFunc {
 
 const struct ParseFunc PARSE_FUNCS[] = {
     { "Recursive Descent", parse },
-    { "Pratt", alt_parse },
+    { "Pratt", fast_parse },
     { NULL, NULL },
 };
 
@@ -461,7 +461,7 @@ int main(int argc, char *argv[]) {
     res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
     for (const struct TestCase *test = TESTS; test->expr; ++ test) {
         for (size_t iter = 0; iter < ITERS; ++ iter) {
-            struct AstNode *expr = alt_parse(test->expr, &error);
+            struct AstNode *expr = fast_parse(test->expr, &error);
             if (expr == NULL) {
                 fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
                 print_parser_error(stderr, test->expr, &error, 1);
@@ -507,9 +507,9 @@ int main(int argc, char *argv[]) {
         struct OptItem *opt_item = &opt_items[index];
         const struct TestCase *test = &TESTS[index];
 
-        opt_item->expr = alt_parse(test->expr, NULL);
+        opt_item->expr = fast_parse(test->expr, NULL);
         if (opt_item->expr == NULL) {
-            perror("alt_parse(test->expr, NULL)");
+            perror("fast_parse(test->expr, NULL)");
             goto opt_init_loop_error;
         }
 

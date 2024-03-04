@@ -98,7 +98,7 @@ programming languages don't need more lookahead than one single token.
 ### Faster and More Maintainable Parser
 
 However, this will yield an inefficient parser that is hard to maintain with
-a lot of redundant code. Instead you can write it like in `alt_parser.c`
+a lot of redundant code. Instead you can write it like in `fast_parser.c`
 where all binary operations are done at once and operator precedence can
 be configured in `get_precedence()`.
 

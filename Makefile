@@ -20,7 +20,7 @@ else
 endif
 endif
 
-SHARED_OBJ = build/$(BUILD_TYPE)/alt_parser.o \
+SHARED_OBJ = build/$(BUILD_TYPE)/fast_parser.o \
              build/$(BUILD_TYPE)/ast.o \
              build/$(BUILD_TYPE)/parser.o \
              build/$(BUILD_TYPE)/tokenizer.o \

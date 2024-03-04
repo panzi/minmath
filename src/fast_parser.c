@@ -1,11 +1,11 @@
-#include "alt_parser.h"
+#include "fast_parser.h"
 
 #include <assert.h>
 #include <stdbool.h>
 
-static struct AstNode *alt_parse_expression(struct AltParser *parser, int min_precedence);
-static struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct AstNode *left, int min_precedence);
-static struct AstNode *alt_parse_leaf(struct AltParser *parser);
+static struct AstNode *fast_parse_expression(struct AltParser *parser, int min_precedence);
+static struct AstNode *fast_parse_increasing_precedence(struct AltParser *parser, struct AstNode *left, int min_precedence);
+static struct AstNode *fast_parse_leaf(struct AltParser *parser);
 static inline int get_precedence(enum NodeType type);
 static inline bool is_binary_operation(enum TokenType token);
 static inline enum NodeType get_binary_node_type(enum TokenType token);
@@ -20,13 +20,13 @@ static inline enum NodeType get_binary_node_type(enum TokenType token);
 // recursion level for every new operator, but this will stay at the same level.
 // This parser uses the same tokenizer as the parser above.
 
-void alt_parser_free(struct AltParser *parser) {
+void fast_parser_free(struct AltParser *parser) {
     tokenizer_free(&parser->tokenizer);
 }
 
-struct AstNode *alt_parse(const char *input, struct ErrorInfo *error) {
+struct AstNode *fast_parse(const char *input, struct ErrorInfo *error) {
     struct AltParser parser = ALT_PARSER_INIT(input);
-    struct AstNode *expr = alt_parse_expression(&parser, 0);
+    struct AstNode *expr = fast_parse_expression(&parser, 0);
     if (expr != NULL) {
         if (next_token(&parser.tokenizer) != TOK_EOF) {
             parser.error.error  = PARSER_ERROR_ILLEGAL_TOKEN;
@@ -40,12 +40,12 @@ struct AstNode *alt_parse(const char *input, struct ErrorInfo *error) {
         *error = parser.error;
     }
 
-    alt_parser_free(&parser);
+    fast_parser_free(&parser);
     return expr;
 }
 
 
-struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct AstNode *left, int min_precedence) {
+struct AstNode *fast_parse_increasing_precedence(struct AltParser *parser, struct AstNode *left, int min_precedence) {
     enum TokenType token = peek_token(&parser->tokenizer);
 
     if (token == TOK_QUEST) {
@@ -55,7 +55,7 @@ struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct
         next_token(&parser->tokenizer);
 
         size_t start_offset = parser->tokenizer.token_pos;
-        struct AstNode *then_expr = alt_parse_expression(parser, 0);
+        struct AstNode *then_expr = fast_parse_expression(parser, 0);
         if (then_expr == NULL) {
             ast_free(left);
             return NULL;
@@ -69,7 +69,7 @@ struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct
             return NULL;
         }
 
-        struct AstNode *else_expr = alt_parse_expression(parser, 0);
+        struct AstNode *else_expr = fast_parse_expression(parser, 0);
         if (else_expr == NULL) {
             ast_free(left);
             ast_free(then_expr);
@@ -103,7 +103,7 @@ struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct
     // eat the peeked token
     next_token(&parser->tokenizer);
 
-    struct AstNode *right = alt_parse_expression(parser, precedence);
+    struct AstNode *right = fast_parse_expression(parser, precedence);
     if (right == NULL) {
         ast_free(left);
         return NULL;
@@ -119,14 +119,14 @@ struct AstNode *alt_parse_increasing_precedence(struct AltParser *parser, struct
     return expr;
 }
 
-struct AstNode *alt_parse_expression(struct AltParser *parser, int min_precedence) {
-    struct AstNode *expr = alt_parse_leaf(parser);
+struct AstNode *fast_parse_expression(struct AltParser *parser, int min_precedence) {
+    struct AstNode *expr = fast_parse_leaf(parser);
     if (expr == NULL) {
         return NULL;
     }
 
     for (;;) {
-        struct AstNode *new_expr = alt_parse_increasing_precedence(parser, expr, min_precedence);
+        struct AstNode *new_expr = fast_parse_increasing_precedence(parser, expr, min_precedence);
         if (new_expr == NULL) {
             return NULL;
         }
@@ -141,7 +141,7 @@ struct AstNode *alt_parse_expression(struct AltParser *parser, int min_precedenc
     return expr;
 }
 
-struct AstNode *alt_parse_leaf(struct AltParser *parser) {
+struct AstNode *fast_parse_leaf(struct AltParser *parser) {
     enum TokenType token = next_token(&parser->tokenizer);
     struct AstNode *top = NULL;
     struct AstNode *parent = NULL;
@@ -207,7 +207,7 @@ struct AstNode *alt_parse_leaf(struct AltParser *parser) {
         case TOK_LPAREN:
         {
             size_t start_offset = parser->tokenizer.token_pos;
-            child = alt_parse_expression(parser, 0);
+            child = fast_parse_expression(parser, 0);
             if (child == NULL) {
                 ast_free(top);
                 return NULL;

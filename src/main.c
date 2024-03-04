@@ -1,5 +1,5 @@
 // #include "parser.h"
-#include "alt_parser.h"
+#include "fast_parser.h"
 #include "optimizer.h"
 
 #include <string.h>
@@ -29,7 +29,7 @@ int main(int argc, char *argv[]) {
         }
 #endif
 
-        expr = alt_parse(source, &error);
+        expr = fast_parse(source, &error);
         if (expr != NULL) {
             int value = ast_execute_with_environ(expr);
             printf("%s = %d\n", source, value);
