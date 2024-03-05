@@ -227,7 +227,7 @@ struct Stats max_stats(const struct Stats *stats, size_t stats_count) {
 }
 
 void print_bench_header(unsigned int max_name_len) {
-    printf("%*s  %-16s  %-16s  %-16s  %-16s  %-16s\n", max_name_len, "", "sum", "min", "max", "avg", "median");
+    printf("%*s  %-16s  %-10s  %-10s  %-10s  %-10s  %s\n", max_name_len, "", "sum", "min", "max", "avg", "median", "relative to median");
 }
 
 void print_bench(const char *name, unsigned int max_name_len, const struct Stats *stats, const struct Stats *max) {
@@ -249,13 +249,15 @@ void print_bench(const char *name, unsigned int max_name_len, const struct Stats
     int padding = name_len <= max_name_len ? max_name_len - (int)name_len : 0;
 
     printf(
-        "%s:%*s %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %6.2lf %%  %4.2lfx (%4.2lfx ... %4.2lfx)\n",
+        "%s:%*s %2" PRIi64 ".%09ld sec  %5.3lf msec  %5.3lf msec  %5.3lf msec  %5.3lf msec  %6.2lf %%  %4.2lfx (%4.2lfx ... %4.2lfx)\n",
         name, padding, "",
         stats->sum.tv_sec, stats->sum.tv_nsec,
-        stats->min.tv_sec, stats->min.tv_nsec,
-        stats->max.tv_sec, stats->max.tv_nsec,
-        stats->avg.tv_sec, stats->avg.tv_nsec,
-        stats->median.tv_sec, stats->median.tv_nsec,
+
+        TS_TO_DBL(stats->min) * 1000,
+        TS_TO_DBL(stats->max) * 1000,
+        TS_TO_DBL(stats->avg) * 1000,
+        TS_TO_DBL(stats->median) * 1000,
+
         dbl_median_prec,
         dbl_factor,
         dbl_max_median / dbl_max,
@@ -648,7 +650,7 @@ int main(int argc, char *argv[]) {
         ++ test_count;
     }
 
-    printf("\nBenchmarking parsing with %d iterations per expression:\n\n", ITERS);
+    printf("\nBenchmarking parsing with %d iterations:\n\n", ITERS);
 
 #define PARSER_COUNT 2
 #define INDEX_SLOW_PARSER 0
@@ -712,7 +714,7 @@ int main(int argc, char *argv[]) {
 
     free(parse_times);
 
-    printf("\nBenchmarking execution with %d iterations per expression:\n\n", ITERS);
+    printf("\nBenchmarking execution with %d iterations:\n\n", ITERS);
 
     // Benchmarking optimizations
     struct OptItem *opt_items = calloc(test_count, sizeof(struct OptItem));
