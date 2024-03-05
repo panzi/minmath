@@ -16,9 +16,13 @@
 
 #define TS_TO_TV(TS) (struct timeval){ .tv_sec = (TS).tv_sec, .tv_usec = (TS).tv_nsec / 1000 }
 #define TS_TO_DBL(TS) ((double)(TS).tv_sec + (double)(TS).tv_nsec / 1000000000.0)
-#define ITERS 100000
+#define ITERS 10000
 
 extern char **environ;
+
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC 1
+#endif
 
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
 
@@ -67,12 +71,14 @@ static inline struct timespec timespec_sub(const struct timespec lhs, const stru
 static inline struct timespec timespec_div(const struct timespec ts, size_t dividend);
 static inline struct timespec timespec_middle(const struct timespec *times, size_t nmemb);
 static inline void timespec_sort(struct timespec *times, size_t nmemb);
-static int timespec_cmp(const void *lhs, const void *rhs);
+static int timespec_cmp_qsort(const void *lhs, const void *rhs);
+static int timespec_cmp(struct timespec lts, struct timespec rts);
 static inline struct timespec timespec_max(const struct timespec lhs, const struct timespec rhs);
 
 static struct Stats make_stats(struct timespec *times, size_t time_count);
-static void print_bench_header();
-static void print_bench(const char *name, const struct Stats *stats, struct timespec max_sum);
+static struct Stats max_stats(const struct Stats *stats, size_t stats_count);
+static void print_bench_header(unsigned int max_name_len);
+static void print_bench(const char *name, unsigned int max_name_len, const struct Stats *stats, const struct Stats *max);
 #define TS_ZERO (struct timespec){ .tv_sec = 0, .tv_nsec = 0, }
 
 struct timespec timespec_sub(const struct timespec lhs, const struct timespec rhs) {
@@ -132,10 +138,10 @@ struct timespec timespec_middle(const struct timespec *times, size_t nmemb) {
 }
 
 void timespec_sort(struct timespec *times, size_t nmemb) {
-    qsort(times, nmemb, sizeof(struct timespec), timespec_cmp);
+    qsort(times, nmemb, sizeof(struct timespec), timespec_cmp_qsort);
 }
 
-int timespec_cmp(const void *lhs, const void *rhs) {
+int timespec_cmp_qsort(const void *lhs, const void *rhs) {
     const struct timespec *lts = lhs;
     const struct timespec *rts = rhs;
     return (
@@ -143,6 +149,16 @@ int timespec_cmp(const void *lhs, const void *rhs) {
         lts->tv_sec  > rts->tv_sec  ?  1 :
         lts->tv_nsec < rts->tv_nsec ? -1 :
         lts->tv_nsec > rts->tv_nsec ?  1 :
+        0
+    );
+}
+
+int timespec_cmp(struct timespec lts, struct timespec rts) {
+    return (
+        lts.tv_sec  < rts.tv_sec  ? -1 :
+        lts.tv_sec  > rts.tv_sec  ?  1 :
+        lts.tv_nsec < rts.tv_nsec ? -1 :
+        lts.tv_nsec > rts.tv_nsec ?  1 :
         0
     );
 }
@@ -180,27 +196,70 @@ struct Stats make_stats(struct timespec *times, size_t time_count) {
     };
 }
 
-void print_bench_header() {
-    printf("                   %-16s  %-16s  %-16s  %-16s  %-16s\n", "sum", "min", "max", "avg", "median");
+struct Stats max_stats(const struct Stats *stats, size_t stats_count) {
+    assert(stats_count > 0);
+    struct Stats max = stats[0];
+
+    for (size_t index = 1; index < stats_count; ++ index) {
+        const struct Stats *item = &stats[index];
+        if (timespec_cmp(max.min, item->min) > 0) {
+            max.min = item->min;
+        }
+
+        if (timespec_cmp(max.max, item->max) < 0) {
+            max.max = item->max;
+        }
+
+        if (timespec_cmp(max.sum, item->sum) < 0) {
+            max.sum = item->sum;
+        }
+
+        if (timespec_cmp(max.avg, item->avg) < 0) {
+            max.avg = item->avg;
+        }
+
+        if (timespec_cmp(max.median, item->median) < 0) {
+            max.median = item->median;
+        }
+    }
+
+    return max;
 }
 
-void print_bench(const char *name, const struct Stats *stats, struct timespec max_sum) {
-    double dbl_sum = TS_TO_DBL(stats->sum);
-    double dbl_max_sum = TS_TO_DBL(max_sum);
+void print_bench_header(unsigned int max_name_len) {
+    printf("%*s  %-16s  %-16s  %-16s  %-16s  %-16s\n", max_name_len, "", "sum", "min", "max", "avg", "median");
+}
+
+void print_bench(const char *name, unsigned int max_name_len, const struct Stats *stats, const struct Stats *max) {
+    double dbl_median = TS_TO_DBL(stats->median);
+    double dbl_min = TS_TO_DBL(stats->min);
+    double dbl_max = TS_TO_DBL(stats->max);
+    double dbl_max_median = TS_TO_DBL(max->median);
+    // double dbl_max_min    = TS_TO_DBL(max->min);
+    // double dbl_max_max    = TS_TO_DBL(max->max);
+
+    double dbl_median_prec = 100.0 * dbl_median / dbl_max_median;
+    // double perc_plus  = 100.0 * dbl_max / dbl_max_median - dbl_median_prec;
+    // double perc_minus = dbl_median_prec - 100.0 * dbl_min / dbl_max_median;
+    // double perc_margin = MAX(perc_plus, perc_minus);
+
+    double dbl_factor = dbl_max_median / dbl_median;
 
     size_t name_len = strlen(name);
-    int padding = name_len <= 17 ? 17 - (int)name_len : 0;
+    int padding = name_len <= max_name_len ? max_name_len - (int)name_len : 0;
 
     printf(
-        "%s:%*s %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %6.2lf %%  %.2lfx\n",
+        "%s:%*s %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %2" PRIi64 ".%09ld sec  %6.2lf %%  %4.2lfx (%4.2lfx ... %4.2lfx)\n",
         name, padding, "",
         stats->sum.tv_sec, stats->sum.tv_nsec,
         stats->min.tv_sec, stats->min.tv_nsec,
         stats->max.tv_sec, stats->max.tv_nsec,
         stats->avg.tv_sec, stats->avg.tv_nsec,
         stats->median.tv_sec, stats->median.tv_nsec,
-        100.0 * dbl_sum / dbl_max_sum,
-        dbl_max_sum / dbl_sum
+        dbl_median_prec,
+        dbl_factor,
+        dbl_max_median / dbl_max,
+        dbl_max_median / dbl_min
     );
 }
 
@@ -639,15 +698,17 @@ int main(int argc, char *argv[]) {
         parse_times[INDEX_FAST_PARSER * ITERS + iter] = timespec_sub(ts_end, ts_start);
     }
 
-    struct Stats slow_parser_stats = make_stats(parse_times + INDEX_SLOW_PARSER * ITERS, ITERS);
-    struct Stats fast_parser_stats = make_stats(parse_times + INDEX_FAST_PARSER * ITERS, ITERS);
-
-    struct timespec parser_max_sum = timespec_max(slow_parser_stats.sum, fast_parser_stats.sum);
+    struct Stats stats_slow_parser = make_stats(parse_times + INDEX_SLOW_PARSER * ITERS, ITERS);
+    struct Stats stats_fast_parser = make_stats(parse_times + INDEX_FAST_PARSER * ITERS, ITERS);
+    struct Stats stats_parser_max = max_stats((struct Stats[]){
+        stats_slow_parser,
+        stats_fast_parser,
+    }, PARSER_COUNT);
 
     printf("Parser benchmark result:\n");
-    print_bench_header();
-    print_bench("Recursive Descent", &slow_parser_stats, parser_max_sum);
-    print_bench("Pratt",             &fast_parser_stats, parser_max_sum);
+    print_bench_header(17);
+    print_bench("Recursive Descent", 17, &stats_slow_parser, &stats_parser_max);
+    print_bench("Pratt",             17, &stats_fast_parser, &stats_parser_max);
 
     free(parse_times);
 
@@ -770,12 +831,12 @@ int main(int argc, char *argv[]) {
 
     // ast_execute_with_environ()
     for (size_t iter = 0; iter < ITERS; ++ iter) {
-        char **environ_bakup = environ;
         res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
         for (size_t test_index = 0; test_index < test_count; ++ test_index) {
             const struct TestCase *test = &TESTS[test_index];
             struct OptItem *opt_item = &opt_items[test_index];
 
+            char **environ_bakup = environ;
             environ = test->environ;
             int result = ast_execute_with_environ(opt_item->expr);
             environ = environ_bakup;
@@ -795,21 +856,16 @@ int main(int argc, char *argv[]) {
     }
 
     // ast_optimize() + ast_execute_with_environ()
-    for (size_t test_index = 0; test_index < test_count; ++ test_index) {
-        const struct TestCase *test = &TESTS[test_index];
-        struct OptItem *opt_item = &opt_items[test_index];
+    for (size_t iter = 0; iter < ITERS; ++ iter) {
+        res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+        for (size_t test_index = 0; test_index < test_count; ++ test_index) {
+            const struct TestCase *test = &TESTS[test_index];
+            struct OptItem *opt_item = &opt_items[test_index];
 
-        for (size_t iter = 0; iter < ITERS; ++ iter) {
             char **environ_bakup = environ;
-            res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
             environ = test->environ;
             int result = ast_execute_with_environ(opt_item->opt_expr);
             environ = environ_bakup;
-            res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
-            assert(res_start == 0); (void)res_start;
-            assert(res_end == 0); (void)res_end;
-            struct timespec dur = exec_times[INDEX_OPT_AST_EXECUTE * test_count * ITERS + test_index * ITERS + iter] = timespec_sub(ts_end, ts_start);
-            ts_opt_ast_execute = timespec_add(ts_opt_ast_execute, dur);
 
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", test_index, test->expr, result, test->result);
@@ -819,22 +875,19 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
         }
+        res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+        assert(res_start == 0); (void)res_start;
+        assert(res_end == 0); (void)res_end;
+        exec_times[INDEX_OPT_AST_EXECUTE * ITERS + iter] = timespec_sub(ts_end, ts_start);
     }
 
     // ast_execute_with_params()
-    struct timespec ts_ast_execute_with_params = TS_ZERO;
-    for (size_t test_index = 0; test_index < test_count; ++ test_index) {
-        const struct TestCase *test = &TESTS[test_index];
-        struct OptItem *opt_item = &opt_items[test_index];
-
-        for (size_t iter = 0; iter < ITERS; ++ iter) {
-            res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    for (size_t iter = 0; iter < ITERS; ++ iter) {
+        res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+        for (size_t test_index = 0; test_index < test_count; ++ test_index) {
+            const struct TestCase *test = &TESTS[test_index];
+            struct OptItem *opt_item = &opt_items[test_index];
             int result = ast_execute_with_params(opt_item->expr, opt_item->ast_params, opt_item->ast_params_size);
-            res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
-            assert(res_start == 0); (void)res_start;
-            assert(res_end == 0); (void)res_end;
-            struct timespec dur = exec_times[INDEX_AST_EXECUTE_WITH_PARAMS * test_count * ITERS + test_index * ITERS + iter] = timespec_sub(ts_end, ts_start);
-            ts_ast_execute_with_params = timespec_add(ts_ast_execute_with_params, dur);
 
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", test_index, test->expr, result, test->result);
@@ -844,22 +897,19 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
         }
+        res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+        assert(res_start == 0); (void)res_start;
+        assert(res_end == 0); (void)res_end;
+        exec_times[INDEX_AST_EXECUTE_WITH_PARAMS * ITERS + iter] = timespec_sub(ts_end, ts_start);
     }
 
     // ast_optimize() + ast_execute_with_environ()
-    struct timespec ts_opt_ast_execute_with_params = TS_ZERO;
-    for (size_t test_index = 0; test_index < test_count; ++ test_index) {
-        const struct TestCase *test = &TESTS[test_index];
-        struct OptItem *opt_item = &opt_items[test_index];
-
-        for (size_t iter = 0; iter < ITERS; ++ iter) {
-            res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    for (size_t iter = 0; iter < ITERS; ++ iter) {
+        res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+        for (size_t test_index = 0; test_index < test_count; ++ test_index) {
+            const struct TestCase *test = &TESTS[test_index];
+            struct OptItem *opt_item = &opt_items[test_index];
             int result = ast_execute_with_params(opt_item->opt_expr, opt_item->ast_params, opt_item->ast_params_size);
-            res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
-            assert(res_start == 0); (void)res_start;
-            assert(res_end == 0); (void)res_end;
-            struct timespec dur = exec_times[INDEX_OPT_AST_EXECUTE_WITH_PARAMS * test_count * ITERS + test_index * ITERS + iter] = timespec_sub(ts_end, ts_start);
-            ts_opt_ast_execute_with_params = timespec_add(ts_opt_ast_execute_with_params, dur);
 
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", test_index, test->expr, result, test->result);
@@ -869,22 +919,19 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
         }
+        res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+        assert(res_start == 0); (void)res_start;
+        assert(res_end == 0); (void)res_end;
+        exec_times[INDEX_OPT_AST_EXECUTE_WITH_PARAMS * ITERS + iter] = timespec_sub(ts_end, ts_start);
     }
 
     // bytecode_execute()
-    struct timespec ts_unopt_bytecode_execute = TS_ZERO;
-    for (size_t test_index = 0; test_index < test_count; ++ test_index) {
-        const struct TestCase *test = &TESTS[test_index];
-        struct OptItem *opt_item = &opt_items[test_index];
-
-        for (size_t iter = 0; iter < ITERS; ++ iter) {
-            res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    for (size_t iter = 0; iter < ITERS; ++ iter) {
+        res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+        for (size_t test_index = 0; test_index < test_count; ++ test_index) {
+            const struct TestCase *test = &TESTS[test_index];
+            struct OptItem *opt_item = &opt_items[test_index];
             int result = bytecode_execute(&opt_item->unopt_bytecode, opt_item->unopt_params, stack);
-            res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
-            assert(res_start == 0); (void)res_start;
-            assert(res_end == 0); (void)res_end;
-            struct timespec dur = exec_times[INDEX_UNOPT_BYTECODE_EXECUTE * test_count * ITERS + test_index * ITERS + iter] = timespec_sub(ts_end, ts_start);
-            ts_unopt_bytecode_execute = timespec_add(ts_unopt_bytecode_execute, dur);
 
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", test_index, test->expr, result, test->result);
@@ -894,22 +941,19 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
         }
+        res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+        assert(res_start == 0); (void)res_start;
+        assert(res_end == 0); (void)res_end;
+        exec_times[INDEX_UNOPT_BYTECODE_EXECUTE * ITERS + iter] = timespec_sub(ts_end, ts_start);
     }
 
     // ast_optimize() + bytecode_execute()
-    struct timespec ts_bytecode_execute = TS_ZERO;
-    for (size_t test_index = 0; test_index < test_count; ++ test_index) {
-        const struct TestCase *test = &TESTS[test_index];
-        struct OptItem *opt_item = &opt_items[test_index];
-
-        for (size_t iter = 0; iter < ITERS; ++ iter) {
-            res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    for (size_t iter = 0; iter < ITERS; ++ iter) {
+        res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+        for (size_t test_index = 0; test_index < test_count; ++ test_index) {
+            const struct TestCase *test = &TESTS[test_index];
+            struct OptItem *opt_item = &opt_items[test_index];
             int result = bytecode_execute(&opt_item->bytecode, opt_item->params, stack);
-            res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
-            assert(res_start == 0); (void)res_start;
-            assert(res_end == 0); (void)res_end;
-            struct timespec dur = exec_times[INDEX_BYTECODE_EXECUTE * test_count * ITERS + test_index * ITERS + iter] = timespec_sub(ts_end, ts_start);
-            ts_bytecode_execute = timespec_add(ts_bytecode_execute, dur);
 
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", test_index, test->expr, result, test->result);
@@ -919,22 +963,19 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
         }
+        res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+        assert(res_start == 0); (void)res_start;
+        assert(res_end == 0); (void)res_end;
+        exec_times[INDEX_BYTECODE_EXECUTE * ITERS + iter] = timespec_sub(ts_end, ts_start);
     }
 
     // ast_optimize() + bytecode_optimize() + bytecode_execute()
-    struct timespec ts_opt_bytecode_execute = TS_ZERO;
-    for (size_t test_index = 0; test_index < test_count; ++ test_index) {
-        const struct TestCase *test = &TESTS[test_index];
-        struct OptItem *opt_item = &opt_items[test_index];
-
-        for (size_t iter = 0; iter < ITERS; ++ iter) {
-            res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    for (size_t iter = 0; iter < ITERS; ++ iter) {
+        res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+        for (size_t test_index = 0; test_index < test_count; ++ test_index) {
+            const struct TestCase *test = &TESTS[test_index];
+            struct OptItem *opt_item = &opt_items[test_index];
             int result = bytecode_execute(&opt_item->opt_bytecode, opt_item->params, stack);
-            res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
-            assert(res_start == 0); (void)res_start;
-            assert(res_end == 0); (void)res_end;
-            struct timespec dur = exec_times[INDEX_OPT_BYTECODE_EXECUTE * test_count * ITERS + test_index * ITERS + iter] = timespec_sub(ts_end, ts_start);
-            ts_opt_bytecode_execute = timespec_add(ts_opt_bytecode_execute, dur);
 
             if (result != test->result) {
                 fprintf(stderr, "%zu: %s -> %d != %d\n", test_index, test->expr, result, test->result);
@@ -944,35 +985,43 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
         }
+        res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+        assert(res_start == 0); (void)res_start;
+        assert(res_end == 0); (void)res_end;
+        exec_times[INDEX_OPT_BYTECODE_EXECUTE * ITERS + iter] = timespec_sub(ts_end, ts_start);
     }
 
     opt_items_free(opt_items, test_count);
     free(stack);
 
-    for (size_t bench_index = 0; bench_index < BENCH_COUNT; ++ bench_index) {
-        for (size_t test_index = 0; test_index < test_count; ++ test_index) {
-            timespec_sort(exec_times + bench_index * test_count * ITERS + test_index * ITERS, ITERS);
-        }
-    }
-
-    double dbl_ast_execute                 = TS_TO_DBL(ts_ast_execute);
-    double dbl_opt_ast_execute             = TS_TO_DBL(ts_opt_ast_execute);
-    double dbl_ast_execute_with_params     = TS_TO_DBL(ts_ast_execute_with_params);
-    double dbl_opt_ast_execute_with_params = TS_TO_DBL(ts_opt_ast_execute_with_params);
-    double dbl_unopt_bytecode_execute      = TS_TO_DBL(ts_unopt_bytecode_execute);
-    double dbl_bytecode_execute            = TS_TO_DBL(ts_bytecode_execute);
-    double dbl_opt_bytecode_execute        = TS_TO_DBL(ts_opt_bytecode_execute);
+    struct Stats stats_ast_execute                 = make_stats(exec_times + INDEX_AST_EXECUTE * ITERS, ITERS);
+    struct Stats stats_opt_ast_execute             = make_stats(exec_times + INDEX_OPT_AST_EXECUTE * ITERS, ITERS);
+    struct Stats stats_ast_execute_with_params     = make_stats(exec_times + INDEX_AST_EXECUTE_WITH_PARAMS * ITERS, ITERS);
+    struct Stats stats_opt_ast_execute_with_params = make_stats(exec_times + INDEX_OPT_AST_EXECUTE_WITH_PARAMS * ITERS, ITERS);
+    struct Stats stats_unopt_bytecode_execute      = make_stats(exec_times + INDEX_UNOPT_BYTECODE_EXECUTE * ITERS, ITERS);
+    struct Stats stats_bytecode_execute            = make_stats(exec_times + INDEX_BYTECODE_EXECUTE * ITERS, ITERS);
+    struct Stats stats_opt_bytecode_execute        = make_stats(exec_times + INDEX_OPT_BYTECODE_EXECUTE * ITERS, ITERS);
+    struct Stats stats_max = max_stats((struct Stats[]){
+        stats_ast_execute,
+        stats_opt_ast_execute,
+        stats_ast_execute_with_params,
+        stats_opt_ast_execute_with_params,
+        stats_unopt_bytecode_execute,
+        stats_bytecode_execute,
+        stats_opt_bytecode_execute,
+    }, BENCH_COUNT);
 
     printf("Execution benchmark result:\n");
-    printf("ast with environ:                 %zd.%09zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%  %.2lfx\n", (ptrdiff_t)ts_ast_execute.tv_sec,                 (size_t)ts_ast_execute.tv_nsec,            dbl_ast_execute                 * 1000 / ITERS, dbl_ast_execute                 * 1000 / test_count, 100.0 * dbl_ast_execute                 / dbl_ast_execute, dbl_ast_execute / dbl_ast_execute                );
-    printf("optimized ast with environ:       %zd.%09zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%  %.2lfx\n", (ptrdiff_t)ts_opt_ast_execute.tv_sec,             (size_t)ts_opt_ast_execute.tv_nsec,        dbl_opt_ast_execute             * 1000 / ITERS, dbl_opt_ast_execute             * 1000 / test_count, 100.0 * dbl_opt_ast_execute             / dbl_ast_execute, dbl_ast_execute / dbl_opt_ast_execute            );
-    printf("ast with params:                  %zd.%09zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%  %.2lfx\n", (ptrdiff_t)ts_ast_execute_with_params.tv_sec,     (size_t)ts_ast_execute.tv_nsec,            dbl_ast_execute_with_params     * 1000 / ITERS, dbl_ast_execute_with_params     * 1000 / test_count, 100.0 * dbl_ast_execute_with_params     / dbl_ast_execute, dbl_ast_execute / dbl_ast_execute_with_params    );
-    printf("optimized ast with params:        %zd.%09zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%  %.2lfx\n", (ptrdiff_t)ts_opt_ast_execute_with_params.tv_sec, (size_t)ts_opt_ast_execute.tv_nsec,        dbl_opt_ast_execute_with_params * 1000 / ITERS, dbl_opt_ast_execute_with_params * 1000 / test_count, 100.0 * dbl_opt_ast_execute_with_params / dbl_ast_execute, dbl_ast_execute / dbl_opt_ast_execute_with_params);
-    printf("bytecode:                         %zd.%09zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%  %.2lfx\n", (ptrdiff_t)ts_unopt_bytecode_execute.tv_sec,      (size_t)ts_unopt_bytecode_execute.tv_nsec, dbl_unopt_bytecode_execute      * 1000 / ITERS, dbl_unopt_bytecode_execute      * 1000 / test_count, 100.0 * dbl_unopt_bytecode_execute      / dbl_ast_execute, dbl_ast_execute / dbl_unopt_bytecode_execute     );
-    printf("optimized ast+bytecode:           %zd.%09zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%  %.2lfx\n", (ptrdiff_t)ts_bytecode_execute.tv_sec,            (size_t)ts_bytecode_execute.tv_nsec,       dbl_bytecode_execute            * 1000 / ITERS, dbl_bytecode_execute            * 1000 / test_count, 100.0 * dbl_bytecode_execute            / dbl_ast_execute, dbl_ast_execute / dbl_bytecode_execute           );
-    printf("optimized ast+optimized bytecode: %zd.%09zu sec  %9.6lf msec/iters  %9.6lf msec/tests  %6.2lf %%  %.2lfx\n", (ptrdiff_t)ts_opt_bytecode_execute.tv_sec,        (size_t)ts_opt_bytecode_execute.tv_nsec,   dbl_opt_bytecode_execute        * 1000 / ITERS, dbl_opt_bytecode_execute        * 1000 / test_count, 100.0 * dbl_opt_bytecode_execute        / dbl_ast_execute, dbl_ast_execute / dbl_opt_bytecode_execute       );
+    print_bench_header(32);
+    print_bench("ast with environ",                 32, &stats_ast_execute,                 &stats_max);
+    print_bench("optimized ast with environ",       32, &stats_opt_ast_execute,             &stats_max);
+    print_bench("ast with params",                  32, &stats_ast_execute_with_params,     &stats_max);
+    print_bench("optimized ast with params",        32, &stats_opt_ast_execute_with_params, &stats_max);
+    print_bench("bytecode",                         32, &stats_unopt_bytecode_execute,      &stats_max);
+    print_bench("optimized ast+bytecode",           32, &stats_bytecode_execute,            &stats_max);
+    print_bench("optimized ast+optimized bytecode", 32, &stats_opt_bytecode_execute,        &stats_max);
 
     free(exec_times);
-#endif
+
     return 0;
 }
