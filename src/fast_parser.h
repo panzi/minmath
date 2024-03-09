@@ -1,5 +1,5 @@
-#ifndef MINMATH_ALT_PARSER_H__
-#define MINMATH_ALT_PARSER_H__
+#ifndef MINMATH_FAST_PARSER_H__
+#define MINMATH_FAST_PARSER_H__
 #pragma once
 
 #include "tokenizer.h"
@@ -10,12 +10,12 @@
 extern "C" {
 #endif
 
-struct AltParser {
+struct FastParser {
     struct Tokenizer tokenizer;
     struct ErrorInfo error;
 };
 
-#define ALT_PARSER_INIT(INPUT) {         \
+#define FAST_PARSER_INIT(INPUT) {        \
     .tokenizer = TOKENIZER_INIT(INPUT),  \
     .error = {                           \
         .error  = PARSER_ERROR_OK,       \
@@ -26,7 +26,7 @@ struct AltParser {
 }
 
 struct AstNode *fast_parse(const char *input, struct ErrorInfo *error);
-void fast_parser_free(struct AltParser *parser);
+void fast_parser_free(struct FastParser *parser);
 
 #ifdef __cplusplus
 }
