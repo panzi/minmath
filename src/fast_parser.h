@@ -1,5 +1,5 @@
-#ifndef MINMATH_ALT_PARSER_H__
-#define MINMATH_ALT_PARSER_H__
+#ifndef MINMATH_FAST_PARSER_H__
+#define MINMATH_FAST_PARSER_H__
 #pragma once
 
 #include "tokenizer.h"
