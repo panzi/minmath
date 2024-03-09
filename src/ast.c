@@ -46,6 +46,8 @@ bool ast_is_unary(const struct AstNode *expr) {
     }
 }
 
+#define AST_BUFFER_MAX_CAPACITY (((size_t)2 * 1024 * 1024 * 1024) / sizeof(struct AstNode))
+
 struct AstNode *ast_alloc(struct AstBuffer *buffer) {
     // malloc()ating a list of chunks, not realloc()ating a buffer, because we
     // use pointers all over the place, which would be invalidated on realloc().
@@ -53,8 +55,8 @@ struct AstNode *ast_alloc(struct AstBuffer *buffer) {
         size_t capacity = buffer->last == NULL ? 0 : buffer->last->capacity;
         if (capacity == 0) {
             capacity = 16;
-        } else if (capacity > SIZE_MAX / 2 / sizeof(struct AstNode) - sizeof(struct AstBufferChunk)) {
-            capacity = SIZE_MAX / 2 / sizeof(struct AstNode) - sizeof(struct AstBufferChunk);
+        } else if (capacity >= AST_BUFFER_MAX_CAPACITY / 2) {
+            capacity = AST_BUFFER_MAX_CAPACITY;
         } else {
             capacity *= 2;
         }
