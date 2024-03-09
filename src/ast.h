@@ -54,20 +54,40 @@ struct AstNode {
     } data;
 };
 
+struct AstBufferChunk {
+    size_t size;
+    size_t capacity;
+    struct AstBufferChunk *next;
+    struct AstNode buffer[];
+};
+
+struct AstBuffer {
+    struct AstBufferChunk *first;
+    struct AstBufferChunk *last;
+};
+
+#define AST_BUFFER_INIT() {  \
+    .first = NULL,           \
+    .last  = NULL,           \
+}
+
 struct Param {
     const char *name;
     int value;
 };
 
-struct AstNode *ast_create_terneary(struct AstNode *cond, struct AstNode *then_expr, struct AstNode *else_expr);
-struct AstNode *ast_create_binary(enum NodeType type, struct AstNode *lhs, struct AstNode *rhs);
-struct AstNode *ast_create_unary(enum NodeType type, struct AstNode *child);
-struct AstNode *ast_create_int(int value);
-struct AstNode *ast_create_var(char *name);
+struct AstNode *ast_alloc(struct AstBuffer *buffer);
+void ast_buffer_clear(struct AstBuffer *buffer);
+void ast_buffer_free(struct AstBuffer *buffer);
+
+struct AstNode *ast_create_terneary(struct AstBuffer *buffer, struct AstNode *cond, struct AstNode *then_expr, struct AstNode *else_expr);
+struct AstNode *ast_create_binary(struct AstBuffer *buffer, enum NodeType type, struct AstNode *lhs, struct AstNode *rhs);
+struct AstNode *ast_create_unary(struct AstBuffer *buffer, enum NodeType type, struct AstNode *child);
+struct AstNode *ast_create_int(struct AstBuffer *buffer, int value);
+struct AstNode *ast_create_var(struct AstBuffer *buffer, char *name);
 bool ast_is_binary(const struct AstNode *expr);
 bool ast_is_unary(const struct AstNode *expr);
 void ast_print(FILE *stream, const struct AstNode *expr);
-void ast_free(struct AstNode *node);
 int ast_execute_with_environ(struct AstNode *expr);
 
 /// params need to be sorted

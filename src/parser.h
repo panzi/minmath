@@ -12,11 +12,13 @@ extern "C" {
 
 struct Parser {
     struct Tokenizer tokenizer;
+    struct AstBuffer *buffer;
     struct ErrorInfo error;
 };
 
-#define PARSER_INIT(INPUT) {             \
+#define PARSER_INIT(INPUT, BUFFER) {     \
     .tokenizer = TOKENIZER_INIT(INPUT),  \
+    .buffer    = (BUFFER),               \
     .error = {                           \
         .error  = PARSER_ERROR_OK,       \
         .offset = 0,                     \
@@ -25,7 +27,7 @@ struct Parser {
     },                                   \
 }
 
-struct AstNode *parse(const char *input, struct ErrorInfo *error);
+struct AstNode *parse(struct AstBuffer *buffer, const char *input, struct ErrorInfo *error);
 struct AstNode *parse_expression(struct Parser *parser);
 void parser_free(struct Parser *parser);
 

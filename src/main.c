@@ -12,6 +12,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     int status = 0;
+    struct AstBuffer buffer = AST_BUFFER_INIT();
     for (int argind = 1; argind < argc; ++ argind) {
         struct AstNode *expr;
         struct ErrorInfo error;
@@ -22,34 +23,32 @@ int main(int argc, char *argv[]) {
         if (expr != NULL) {
             int value = ast_execute_with_environ(expr);
             printf("%s = %d\n", source, value);
-            ast_free(expr);
         } else {
             print_parser_error(stderr, source, &error, 3);
             status = 1;
         }
 #endif
 
-        expr = fast_parse(source, &error);
+        expr = fast_parse(&buffer, source, &error);
         if (expr != NULL) {
             int value = ast_execute_with_environ(expr);
             printf("%s = %d\n", source, value);
 
-            struct AstNode *opt_expr = ast_optimize(expr);
+            struct AstNode *opt_expr = ast_optimize(&buffer, expr);
             if (opt_expr != NULL) {
                 int value = ast_execute_with_environ(opt_expr);
                 ast_print(stdout, opt_expr);
                 printf(" = %d\n", value);
-                ast_free(opt_expr);
             } else {
                 print_parser_error(stderr, source, &error, 3);
                 status = 1;
             }
-
-            ast_free(expr);
         } else {
             print_parser_error(stderr, source, &error, 3);
             status = 1;
         }
+        ast_buffer_clear(&buffer);
     }
+    ast_buffer_free(&buffer);
     return status;
 }

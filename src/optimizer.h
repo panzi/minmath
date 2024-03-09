@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-struct AstNode *ast_optimize(const struct AstNode *expr);
+struct AstNode *ast_optimize(struct AstBuffer *buffer, const struct AstNode *expr);
 
 #ifdef __cplusplus
 }

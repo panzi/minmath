@@ -18,14 +18,13 @@ void parser_free(struct Parser *parser) {
     tokenizer_free(&parser->tokenizer);
 }
 
-struct AstNode *parse(const char *input, struct ErrorInfo *error) {
-    struct Parser parser = PARSER_INIT(input);
+struct AstNode *parse(struct AstBuffer *buffer, const char *input, struct ErrorInfo *error) {
+    struct Parser parser = PARSER_INIT(input, buffer);
     struct AstNode *expr = parse_expression(&parser);
     if (expr != NULL) {
         if (next_token(&parser.tokenizer) != TOK_EOF) {
             parser.error.error  = PARSER_ERROR_ILLEGAL_TOKEN;
             parser.error.offset = parser.error.context_offset = parser.tokenizer.token_pos;
-            ast_free(expr);
             expr = NULL;
         }
     }
@@ -60,7 +59,6 @@ struct AstNode *parse_condition(struct Parser *parser) {
         size_t quest_offset = parser->tokenizer.token_pos;
         struct AstNode *then_expr = parse_expression(parser);
         if (then_expr == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
@@ -71,25 +69,18 @@ struct AstNode *parse_condition(struct Parser *parser) {
             parser->error.token = TOK_COLON;
             parser->error.offset = parser->tokenizer.token_pos;
             parser->error.context_offset = quest_offset;
-            ast_free(expr);
-            ast_free(then_expr);
             return NULL;
         }
 
         struct AstNode *else_expr = parse_expression(parser);
         if (else_expr == NULL) {
-            ast_free(expr);
-            ast_free(then_expr);
             return NULL;
         }
 
-        struct AstNode *if_expr = ast_create_terneary(expr, then_expr, else_expr);
+        struct AstNode *if_expr = ast_create_terneary(parser->buffer, expr, then_expr, else_expr);
         if (if_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(then_expr);
-            ast_free(else_expr);
             return NULL;
         }
 
@@ -114,16 +105,13 @@ struct AstNode *parse_or(struct Parser *parser) {
         token = next_token(&parser->tokenizer);
         struct AstNode *rhs = parse_and(parser);
         if (rhs == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(NODE_OR, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(parser->buffer, NODE_OR, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(rhs);
             return NULL;
         }
         expr = new_expr;
@@ -146,16 +134,13 @@ struct AstNode *parse_and(struct Parser *parser) {
         token = next_token(&parser->tokenizer);
         struct AstNode *rhs = parse_bit_or(parser);
         if (rhs == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(NODE_AND, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(parser->buffer, NODE_AND, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(rhs);
             return NULL;
         }
         expr = new_expr;
@@ -178,16 +163,13 @@ struct AstNode *parse_bit_or(struct Parser *parser) {
         token = next_token(&parser->tokenizer);
         struct AstNode *rhs = parse_bit_xor(parser);
         if (rhs == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(NODE_BIT_OR, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(parser->buffer, NODE_BIT_OR, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(rhs);
             return NULL;
         }
         expr = new_expr;
@@ -210,16 +192,13 @@ struct AstNode *parse_bit_xor(struct Parser *parser) {
         token = next_token(&parser->tokenizer);
         struct AstNode *rhs = parse_bit_and(parser);
         if (rhs == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(NODE_BIT_XOR, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(parser->buffer, NODE_BIT_XOR, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(rhs);
             return NULL;
         }
         expr = new_expr;
@@ -242,16 +221,13 @@ struct AstNode *parse_bit_and(struct Parser *parser) {
         token = next_token(&parser->tokenizer);
         struct AstNode *rhs = parse_compare(parser);
         if (rhs == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(NODE_BIT_AND, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(parser->buffer, NODE_BIT_AND, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(rhs);
             return NULL;
         }
         expr = new_expr;
@@ -278,16 +254,13 @@ struct AstNode *parse_compare(struct Parser *parser) {
         token = next_token(&parser->tokenizer);
         struct AstNode *rhs = parse_order(parser);
         if (rhs == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(node_type, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(parser->buffer, node_type, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(rhs);
             return NULL;
         }
         expr = new_expr;
@@ -316,16 +289,13 @@ struct AstNode *parse_order(struct Parser *parser) {
         token = next_token(&parser->tokenizer);
         struct AstNode *rhs = parse_bit_shift(parser);
         if (rhs == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(node_type, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(parser->buffer, node_type, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(rhs);
             return NULL;
         }
         expr = new_expr;
@@ -352,16 +322,13 @@ struct AstNode *parse_bit_shift(struct Parser *parser) {
         token = next_token(&parser->tokenizer);
         struct AstNode *rhs = parse_sum(parser);
         if (rhs == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(node_type, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(parser->buffer, node_type, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(rhs);
             return NULL;
         }
         expr = new_expr;
@@ -388,16 +355,13 @@ struct AstNode *parse_sum(struct Parser *parser) {
         token = next_token(&parser->tokenizer);
         struct AstNode *rhs = parse_product(parser);
         if (rhs == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(node_type, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(parser->buffer, node_type, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(rhs);
             return NULL;
         }
         expr = new_expr;
@@ -425,16 +389,13 @@ struct AstNode *parse_product(struct Parser *parser) {
         token = next_token(&parser->tokenizer);
         struct AstNode *rhs = parse_unary(parser);
         if (rhs == NULL) {
-            ast_free(expr);
             return NULL;
         }
 
-        struct AstNode *new_expr = ast_create_binary(node_type, expr, rhs);
+        struct AstNode *new_expr = ast_create_binary(parser->buffer, node_type, expr, rhs);
         if (new_expr == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(expr);
-            ast_free(rhs);
             return NULL;
         }
         expr = new_expr;
@@ -456,11 +417,11 @@ struct AstNode *parse_unary(struct Parser *parser) {
 
         struct AstNode *child;
         if (token == TOK_MINUS) {
-            child = ast_create_unary(NODE_NEG, NULL);
+            child = ast_create_unary(parser->buffer, NODE_NEG, NULL);
         } else if (token == TOK_BIT_NEG) {
-            child = ast_create_unary(NODE_BIT_NEG, NULL);
+            child = ast_create_unary(parser->buffer, NODE_BIT_NEG, NULL);
         } else if (token == TOK_NOT) {
-            child = ast_create_unary(NODE_NOT, NULL);
+            child = ast_create_unary(parser->buffer, NODE_NOT, NULL);
         } else {
             break;
         }
@@ -468,7 +429,6 @@ struct AstNode *parse_unary(struct Parser *parser) {
         if (child == NULL) {
             parser->error.error  = PARSER_ERROR_MEMORY;
             parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
-            ast_free(top);
             return NULL;
         }
 
@@ -485,7 +445,6 @@ struct AstNode *parse_unary(struct Parser *parser) {
 
     struct AstNode *child = parse_atom(parser);
     if (child == NULL) {
-        ast_free(top);
         return NULL;
     }
 
@@ -502,7 +461,7 @@ struct AstNode *parse_atom(struct Parser *parser) {
     switch (token) {
         case TOK_INT:
         {
-            struct AstNode *expr = ast_create_int(parser->tokenizer.value);
+            struct AstNode *expr = ast_create_int(parser->buffer, parser->tokenizer.value);
             if (expr == NULL) {
                 parser->error.error  = PARSER_ERROR_MEMORY;
                 parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
@@ -513,7 +472,7 @@ struct AstNode *parse_atom(struct Parser *parser) {
         case TOK_IDENT:
         {
             // re-use memory allocated for tokenizer->ident
-            struct AstNode *expr = ast_create_var(parser->tokenizer.ident);
+            struct AstNode *expr = ast_create_var(parser->buffer, parser->tokenizer.ident);
             if (expr == NULL) {
                 parser->error.error  = PARSER_ERROR_MEMORY;
                 parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
@@ -537,7 +496,6 @@ struct AstNode *parse_atom(struct Parser *parser) {
                     parser->error.offset = parser->tokenizer.token_pos;
                     parser->error.context_offset = start_offset;
                 }
-                ast_free(expr);
                 return NULL;
             }
             return expr;

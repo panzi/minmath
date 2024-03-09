@@ -10,23 +10,25 @@
 extern "C" {
 #endif
 
-struct AltParser {
+struct FastParser {
     struct Tokenizer tokenizer;
+    struct AstBuffer *buffer;
     struct ErrorInfo error;
 };
 
-#define ALT_PARSER_INIT(INPUT) {         \
-    .tokenizer = TOKENIZER_INIT(INPUT),  \
-    .error = {                           \
-        .error  = PARSER_ERROR_OK,       \
-        .offset = 0,                     \
-        .context_offset = 0,             \
-        .token  = TOK_EOF,               \
-    },                                   \
+#define FAST_PARSER_INIT(INPUT, BUFFER) {  \
+    .tokenizer = TOKENIZER_INIT(INPUT),    \
+    .buffer    = (BUFFER),                 \
+    .error = {                             \
+        .error  = PARSER_ERROR_OK,         \
+        .offset = 0,                       \
+        .context_offset = 0,               \
+        .token  = TOK_EOF,                 \
+    },                                     \
 }
 
-struct AstNode *fast_parse(const char *input, struct ErrorInfo *error);
-void fast_parser_free(struct AltParser *parser);
+struct AstNode *fast_parse(struct AstBuffer *buffer, const char *input, struct ErrorInfo *error);
+void fast_parser_free(struct FastParser *parser);
 
 #ifdef __cplusplus
 }

@@ -7,8 +7,6 @@
 #include <stdint.h>
 #include <errno.h>
 
-#define AST_MALLOC() malloc(sizeof(struct AstNode))
-
 bool ast_is_binary(const struct AstNode *expr) {
     switch (expr->type) {
         case NODE_ADD:
@@ -48,8 +46,85 @@ bool ast_is_unary(const struct AstNode *expr) {
     }
 }
 
-struct AstNode *ast_create_terneary(struct AstNode *cond, struct AstNode *then_expr, struct AstNode *else_expr) {
-    struct AstNode *node = AST_MALLOC();
+struct AstNode *ast_alloc(struct AstBuffer *buffer) {
+    // malloc()ating a list of chunks, not realloc()ating a buffer, because we
+    // use pointers all over the place, which would be invalidated on realloc().
+    if (buffer->last == NULL || buffer->last->size == buffer->last->capacity) {
+        size_t capacity = buffer->last == NULL ? 0 : buffer->last->capacity;
+        if (capacity == 0) {
+            capacity = 16;
+        } else if (capacity > SIZE_MAX / 2 / sizeof(struct AstNode) - sizeof(struct AstBufferChunk)) {
+            capacity = SIZE_MAX / 2 / sizeof(struct AstNode) - sizeof(struct AstBufferChunk);
+        } else {
+            capacity *= 2;
+        }
+        struct AstBufferChunk *new_chunk = malloc(sizeof(struct AstBufferChunk) + capacity * sizeof(struct AstNode));
+        if (new_chunk == NULL) {
+            return NULL;
+        }
+
+        new_chunk->size     = 0;
+        new_chunk->capacity = capacity;
+        new_chunk->next     = NULL;
+
+        if (buffer->first == NULL) {
+            buffer->first = new_chunk;
+        } else {
+            buffer->last->next = new_chunk;
+        }
+        buffer->last = new_chunk;
+    }
+
+    struct AstNode *node = &buffer->last->buffer[buffer->last->size];
+    ++ buffer->last->size;
+    return node;
+}
+
+void ast_buffer_clear(struct AstBuffer *buffer) {
+    struct AstBufferChunk *last = buffer->last;
+    for (struct AstBufferChunk *ptr = buffer->first; ptr != last;) {
+        struct AstBufferChunk *chunk = ptr;
+        for (size_t index = 0; index < chunk->size; ++ index) {
+            struct AstNode *node = &chunk->buffer[index];
+            if (node->type == NODE_VAR) {
+                free(node->data.ident);
+            }
+        }
+        ptr = ptr->next;
+        free(chunk);
+    }
+
+    if (last != NULL) {
+        for (size_t index = 0; index < last->size; ++ index) {
+            struct AstNode *node = &last->buffer[index];
+            if (node->type == NODE_VAR) {
+                free(node->data.ident);
+            }
+        }
+        last->size = 0;
+        buffer->first = last;
+    }
+}
+
+void ast_buffer_free(struct AstBuffer *buffer) {
+    for (struct AstBufferChunk *ptr = buffer->first; ptr != NULL;) {
+        struct AstBufferChunk *chunk = ptr;
+        for (size_t index = 0; index < chunk->size; ++ index) {
+            struct AstNode *node = &chunk->buffer[index];
+            if (node->type == NODE_VAR) {
+                free(node->data.ident);
+            }
+        }
+        ptr = ptr->next;
+        free(chunk);
+    }
+
+    buffer->first = NULL;
+    buffer->last  = NULL;
+}
+
+struct AstNode *ast_create_terneary(struct AstBuffer *buffer, struct AstNode *cond, struct AstNode *then_expr, struct AstNode *else_expr) {
+    struct AstNode *node = ast_alloc(buffer);
     if (node == NULL) {
         return NULL;
     }
@@ -68,7 +143,7 @@ struct AstNode *ast_create_terneary(struct AstNode *cond, struct AstNode *then_e
     return node;
 }
 
-struct AstNode *ast_create_binary(enum NodeType type, struct AstNode *lhs, struct AstNode *rhs) {
+struct AstNode *ast_create_binary(struct AstBuffer *buffer, enum NodeType type, struct AstNode *lhs, struct AstNode *rhs) {
     assert(
         type == NODE_ADD ||
         type == NODE_SUB ||
@@ -90,7 +165,7 @@ struct AstNode *ast_create_binary(enum NodeType type, struct AstNode *lhs, struc
         type == NODE_RSHIFT
     );
 
-    struct AstNode *node = AST_MALLOC();
+    struct AstNode *node = ast_alloc(buffer);
     if (node == NULL) {
         return NULL;
     }
@@ -108,10 +183,10 @@ struct AstNode *ast_create_binary(enum NodeType type, struct AstNode *lhs, struc
     return node;
 }
 
-struct AstNode *ast_create_unary(enum NodeType type, struct AstNode *child) {
+struct AstNode *ast_create_unary(struct AstBuffer *buffer, enum NodeType type, struct AstNode *child) {
     assert(type == NODE_NEG || type == NODE_BIT_NEG || type == NODE_NOT);
 
-    struct AstNode *node = AST_MALLOC();
+    struct AstNode *node = ast_alloc(buffer);
     if (node == NULL) {
         return NULL;
     }
@@ -126,8 +201,8 @@ struct AstNode *ast_create_unary(enum NodeType type, struct AstNode *child) {
     return node;
 }
 
-struct AstNode *ast_create_int(int value) {
-    struct AstNode *node = AST_MALLOC();
+struct AstNode *ast_create_int(struct AstBuffer *buffer, int value) {
+    struct AstNode *node = ast_alloc(buffer);
     if (node == NULL) {
         return NULL;
     }
@@ -142,8 +217,8 @@ struct AstNode *ast_create_int(int value) {
     return node;
 }
 
-struct AstNode *ast_create_var(char *name) {
-    struct AstNode *node = AST_MALLOC();
+struct AstNode *ast_create_var(struct AstBuffer *buffer, char *name) {
+    struct AstNode *node = ast_alloc(buffer);
     if (node == NULL) {
         return NULL;
     }
@@ -156,54 +231,6 @@ struct AstNode *ast_create_var(char *name) {
     };
 
     return node;
-}
-
-void ast_free(struct AstNode *node) {
-    if (node != NULL) {
-        switch (node->type) {
-            case NODE_ADD:
-            case NODE_SUB:
-            case NODE_MUL:
-            case NODE_DIV:
-            case NODE_MOD:
-            case NODE_AND:
-            case NODE_OR:
-            case NODE_LT:
-            case NODE_GT:
-            case NODE_LE:
-            case NODE_GE:
-            case NODE_EQ:
-            case NODE_NE:
-            case NODE_BIT_AND:
-            case NODE_BIT_OR:
-            case NODE_BIT_XOR:
-            case NODE_LSHIFT:
-            case NODE_RSHIFT:
-                ast_free(node->data.binary.lhs);
-                ast_free(node->data.binary.rhs);
-                break;
-
-            case NODE_IF:
-                ast_free(node->data.terneary.cond);
-                ast_free(node->data.terneary.then_expr);
-                ast_free(node->data.terneary.else_expr);
-                break;
-
-            case NODE_NEG:
-            case NODE_BIT_NEG:
-            case NODE_NOT:
-                ast_free(node->data.child);
-                break;
-
-            case NODE_VAR:
-                free(node->data.ident);
-                break;
-
-            case NODE_INT:
-                break;
-        }
-        free(node);
-    }
 }
 
 void ast_print(FILE *stream, const struct AstNode *expr) {

@@ -22,20 +22,18 @@ static inline bool ast_is_boolean(const struct AstNode *expr) {
     }
 }
 
-static inline struct AstNode *ast_create_bool(struct AstNode *child) {
+static inline struct AstNode *ast_create_bool(struct AstBuffer *buffer, struct AstNode *child) {
     if (ast_is_boolean(child)) {
         return child;
     }
 
-    struct AstNode *bool1 = ast_create_unary(NODE_NOT, child);
+    struct AstNode *bool1 = ast_create_unary(buffer, NODE_NOT, child);
     if (bool1 == NULL) {
-        ast_free(child);
         return NULL;
     }
 
-    struct AstNode *bool2 = ast_create_unary(NODE_NOT, bool1);
+    struct AstNode *bool2 = ast_create_unary(buffer, NODE_NOT, bool1);
     if (bool2 == NULL) {
-        ast_free(bool1);
         return NULL;
     }
 
@@ -56,16 +54,14 @@ static inline int factor_to_shift_count(int factor) {
 }
 
 // This optimizer just does simple constant folding.
-struct AstNode *ast_optimize(const struct AstNode *expr) {
+struct AstNode *ast_optimize(struct AstBuffer *buffer, const struct AstNode *expr) {
     assert(expr != NULL);
 
     if (ast_is_binary(expr)) {
-        struct AstNode *lhs = ast_optimize(expr->data.binary.lhs);
-        struct AstNode *rhs = ast_optimize(expr->data.binary.rhs);
+        struct AstNode *lhs = ast_optimize(buffer, expr->data.binary.lhs);
+        struct AstNode *rhs = ast_optimize(buffer, expr->data.binary.rhs);
 
         if (lhs == NULL || rhs == NULL) {
-            ast_free(lhs);
-            ast_free(rhs);
             return NULL;
         }
 
@@ -85,11 +81,9 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
 
                 case NODE_DIV:
                     if (rhs->data.value == 0) {
-                        struct AstNode *opt_expr = ast_create_binary(expr->type, lhs, rhs);
+                        struct AstNode *opt_expr = ast_create_binary(buffer, expr->type, lhs, rhs);
 
                         if (opt_expr == NULL) {
-                            ast_free(lhs);
-                            ast_free(rhs);
                             return NULL;
                         }
 
@@ -100,11 +94,9 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
 
                 case NODE_MOD:
                     if (rhs->data.value == 0) {
-                        struct AstNode *opt_expr = ast_create_binary(expr->type, lhs, rhs);
+                        struct AstNode *opt_expr = ast_create_binary(buffer, expr->type, lhs, rhs);
 
                         if (opt_expr == NULL) {
-                            ast_free(lhs);
-                            ast_free(rhs);
                             return NULL;
                         }
 
@@ -167,13 +159,10 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
 
                 default:
                     assert(false);
-                    ast_free(lhs);
-                    ast_free(rhs);
                     errno = EINVAL;
                     return NULL;
             }
 
-            ast_free(rhs);
             return lhs;
         } else {
             if (expr->type == NODE_AND || expr->type == NODE_OR) {
@@ -181,14 +170,12 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                 if (lhs->type == NODE_NOT && lhs->data.child->type == NODE_NOT) {
                     tmp = lhs->data.child;
                     lhs->data.child = NULL;
-                    ast_free(lhs);
                     lhs = tmp;
                 }
 
                 if (rhs->type == NODE_NOT && rhs->data.child->type == NODE_NOT) {
                     tmp = rhs->data.child;
                     rhs->data.child = NULL;
-                    ast_free(rhs);
                     rhs = tmp;
                 }
             }
@@ -203,7 +190,6 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                     expr->type == NODE_RSHIFT
                 ) && rhs->type == NODE_INT && rhs->data.value == 0
             ) {
-                ast_free(rhs);
                 return lhs;
             } else if (
                 (
@@ -211,44 +197,35 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                     expr->type == NODE_BIT_OR
                 ) && lhs->type == NODE_INT && lhs->data.value == 0
             ) {
-                ast_free(lhs);
                 return rhs;
             } else if (
                 expr->type == NODE_OR && rhs->type == NODE_INT && rhs->data.value == 0
             ) {
-                ast_free(rhs);
-                return ast_create_bool(lhs);
+                return ast_create_bool(buffer, lhs);
             } else if (
                 expr->type == NODE_OR && lhs->type == NODE_INT && lhs->data.value == 0
             ) {
-                ast_free(lhs);
-                return ast_create_bool(rhs);
+                return ast_create_bool(buffer, rhs);
             } else if (
                 expr->type == NODE_OR && (
                     (rhs->type == NODE_INT && rhs->data.value != 0) ||
                     (lhs->type == NODE_INT && lhs->data.value != 0)
                 )
             ) {
-                ast_free(rhs);
-                ast_free(lhs);
-                return ast_create_int(1);
+                return ast_create_int(buffer, 1);
             } else if (
                 expr->type == NODE_AND && rhs->type == NODE_INT && rhs->data.value != 0
             ) {
-                ast_free(rhs);
-                return ast_create_bool(lhs);
+                return ast_create_bool(buffer, lhs);
             } else if (
                 expr->type == NODE_AND && lhs->type == NODE_INT && lhs->data.value != 0
             ) {
-                ast_free(lhs);
-                return ast_create_bool(rhs);
+                return ast_create_bool(buffer, rhs);
             } else if (
                 expr->type == NODE_SUB && lhs->type == NODE_INT && lhs->data.value == 0
             ) {
-                ast_free(lhs);
-                struct AstNode *opt_expr = ast_create_unary(NODE_NEG, rhs);
+                struct AstNode *opt_expr = ast_create_unary(buffer, NODE_NEG, rhs);
                 if (opt_expr == NULL) {
-                    ast_free(rhs);
                     return NULL;
                 }
                 return opt_expr;
@@ -265,48 +242,38 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                     expr->type == NODE_MOD
                 ) && lhs->type == NODE_INT && lhs->data.value == 0)
             ) {
-                ast_free(lhs);
-                ast_free(rhs);
-                return ast_create_int(0);
+                return ast_create_int(buffer, 0);
             } else if (
                 expr->type == NODE_EQ && lhs->type == NODE_INT && lhs->data.value == 0
             ) {
-                ast_free(lhs);
-                struct AstNode *opt_expr = ast_create_unary(NODE_NOT, rhs);
+                struct AstNode *opt_expr = ast_create_unary(buffer, NODE_NOT, rhs);
                 if (opt_expr == NULL) {
-                    ast_free(rhs);
                     return NULL;
                 }
                 return opt_expr;
             } else if (
                 expr->type == NODE_EQ && rhs->type == NODE_INT && rhs->data.value == 0
             ) {
-                ast_free(rhs);
-                struct AstNode *opt_expr = ast_create_unary(NODE_NOT, lhs);
+                struct AstNode *opt_expr = ast_create_unary(buffer, NODE_NOT, lhs);
                 if (opt_expr == NULL) {
-                    ast_free(lhs);
                     return NULL;
                 }
                 return opt_expr;
             } else if (
                 (expr->type == NODE_MUL || expr->type == NODE_DIV) && rhs->type == NODE_INT && rhs->data.value == 1
             ) {
-                ast_free(rhs);
                 return lhs;
             } else if (
                 expr->type == NODE_MUL && lhs->type == NODE_INT && lhs->data.value == 1
             ) {
-                ast_free(lhs);
                 return rhs;
             } else if (
                 expr->type == NODE_MUL && rhs->type == NODE_INT && (bit_shift = factor_to_shift_count(rhs->data.value)) > 0
             ) {
                 rhs->data.value = bit_shift;
-                struct AstNode *opt_expr = ast_create_binary(NODE_LSHIFT, lhs, rhs);
+                struct AstNode *opt_expr = ast_create_binary(buffer, NODE_LSHIFT, lhs, rhs);
 
                 if (opt_expr == NULL) {
-                    ast_free(lhs);
-                    ast_free(rhs);
                     return NULL;
                 }
 
@@ -315,11 +282,9 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                 expr->type == NODE_MUL && lhs->type == NODE_INT && (bit_shift = factor_to_shift_count(lhs->data.value)) > 0
             ) {
                 lhs->data.value = bit_shift;
-                struct AstNode *opt_expr = ast_create_binary(NODE_LSHIFT, rhs, lhs);
+                struct AstNode *opt_expr = ast_create_binary(buffer, NODE_LSHIFT, rhs, lhs);
 
                 if (opt_expr == NULL) {
-                    ast_free(lhs);
-                    ast_free(rhs);
                     return NULL;
                 }
 
@@ -328,21 +293,17 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
                 expr->type == NODE_DIV && rhs->type == NODE_INT && (bit_shift = factor_to_shift_count(rhs->data.value)) > 0
             ) {
                 rhs->data.value = bit_shift;
-                struct AstNode *opt_expr = ast_create_binary(NODE_RSHIFT, lhs, rhs);
+                struct AstNode *opt_expr = ast_create_binary(buffer, NODE_RSHIFT, lhs, rhs);
 
                 if (opt_expr == NULL) {
-                    ast_free(lhs);
-                    ast_free(rhs);
                     return NULL;
                 }
 
                 return opt_expr;
             } else {
-                struct AstNode *opt_expr = ast_create_binary(expr->type, lhs, rhs);
+                struct AstNode *opt_expr = ast_create_binary(buffer, expr->type, lhs, rhs);
 
                 if (opt_expr == NULL) {
-                    ast_free(lhs);
-                    ast_free(rhs);
                     return NULL;
                 }
 
@@ -350,7 +311,7 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
             }
         }
     } else if (expr->type == NODE_IF) {
-        struct AstNode *cond_expr = ast_optimize(expr->data.terneary.cond);
+        struct AstNode *cond_expr = ast_optimize(buffer, expr->data.terneary.cond);
 
         if (cond_expr == NULL) {
             return NULL;
@@ -358,26 +319,22 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
 
         if (cond_expr->type == NODE_INT) {
             int cond_value = cond_expr->data.value;
-            ast_free(cond_expr);
             if (cond_value) {
-                return ast_optimize(expr->data.terneary.then_expr);
+                return ast_optimize(buffer, expr->data.terneary.then_expr);
             } else {
-                return ast_optimize(expr->data.terneary.else_expr);
+                return ast_optimize(buffer, expr->data.terneary.else_expr);
             }
         }
 
-        struct AstNode *then_expr = ast_optimize(expr->data.terneary.then_expr);
+        struct AstNode *then_expr = ast_optimize(buffer, expr->data.terneary.then_expr);
 
         if (then_expr == NULL) {
-            ast_free(cond_expr);
             return NULL;
         }
 
-        struct AstNode *else_expr = ast_optimize(expr->data.terneary.else_expr);
+        struct AstNode *else_expr = ast_optimize(buffer, expr->data.terneary.else_expr);
 
         if (else_expr == NULL) {
-            ast_free(cond_expr);
-            ast_free(then_expr);
             return NULL;
         }
 
@@ -387,26 +344,22 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
             ) {
                 struct AstNode *rhs = cond_expr->data.binary.rhs;
                 cond_expr->data.binary.rhs = NULL;
-                ast_free(cond_expr);
                 cond_expr = rhs;
             } else if (
                 cond_expr->data.binary.rhs->type == NODE_INT && cond_expr->data.binary.rhs->data.value == 0
             ) {
                 struct AstNode *lhs = cond_expr->data.binary.lhs;
                 cond_expr->data.binary.lhs = NULL;
-                ast_free(cond_expr);
                 cond_expr = lhs;
             }
         } else if (cond_expr->type == NODE_NOT) {
             if (cond_expr->data.child->type == NODE_NOT) {
                 struct AstNode *tmp = cond_expr->data.child->data.child;
                 cond_expr->data.child->data.child = NULL;
-                ast_free(cond_expr);
                 cond_expr = tmp;
             } else {
                 struct AstNode *tmp = cond_expr->data.child;
                 cond_expr->data.child = NULL;
-                ast_free(cond_expr);
                 cond_expr = tmp;
                 tmp = then_expr;
                 then_expr = else_expr;
@@ -414,18 +367,15 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
             }
         }
 
-        struct AstNode *if_expr = ast_create_terneary(cond_expr, then_expr, else_expr);
+        struct AstNode *if_expr = ast_create_terneary(buffer, cond_expr, then_expr, else_expr);
 
         if (if_expr == NULL) {
-            ast_free(cond_expr);
-            ast_free(then_expr);
-            ast_free(else_expr);
             return NULL;
         }
 
         return if_expr;
     } else if (ast_is_unary(expr)) {
-        struct AstNode *child = ast_optimize(expr->data.child);
+        struct AstNode *child = ast_optimize(buffer, expr->data.child);
 
         if (child == NULL) {
             return NULL;
@@ -447,7 +397,6 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
 
             default:
                 assert(false);
-                ast_free(child);
                 errno = EINVAL;
                 return NULL;
             }
@@ -459,26 +408,24 @@ struct AstNode *ast_optimize(const struct AstNode *expr) {
         ) {
             struct AstNode *new_expr = child->data.child;
             child->data.child = NULL;
-            ast_free(child);
             return new_expr;
         }
 
-        struct AstNode *unary_expr = ast_create_unary(expr->type, child);
+        struct AstNode *unary_expr = ast_create_unary(buffer, expr->type, child);
 
         if (unary_expr == NULL) {
-            ast_free(child);
             return NULL;
         }
 
         return unary_expr;
     } else if (expr->type == NODE_INT) {
-        return ast_create_int(expr->data.value);
+        return ast_create_int(buffer, expr->data.value);
     } else if (expr->type == NODE_VAR) {
         char *name = strdup(expr->data.ident);
         if (name == NULL) {
             return NULL;
         }
-        return ast_create_var(name);
+        return ast_create_var(buffer, name);
     } else {
         assert(false);
         errno = EINVAL;

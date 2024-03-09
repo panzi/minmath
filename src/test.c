@@ -39,7 +39,7 @@ struct OptItem {
 
 struct ParseFunc {
     const char *name;
-    struct AstNode *(*parse)(const char *input, struct ErrorInfo *error);
+    struct AstNode *(*parse)(struct AstBuffer *buffer, const char *input, struct ErrorInfo *error);
 };
 
 struct Stats {
@@ -80,6 +80,8 @@ static void print_bench_header(unsigned int max_name_len);
 static void print_bench(const char *name, unsigned int max_name_len, const struct Stats *stats, const struct Stats *max);
 #define TS_ZERO (struct timespec){ .tv_sec = 0, .tv_nsec = 0, }
 
+static void print_ast_buffer_stats(const struct AstBuffer *buffer);
+
 struct timespec timespec_sub(const struct timespec lhs, const struct timespec rhs) {
     struct timespec result = {
         .tv_sec  = lhs.tv_sec  - rhs.tv_sec,
@@ -115,7 +117,7 @@ struct timespec timespec_div(const struct timespec ts, size_t dividend) {
         .tv_nsec = ts.tv_nsec / dividend,
     };
 
-    half.tv_nsec += (ts.tv_sec - (half.tv_sec * dividend)) * 1000000000/dividend;
+    half.tv_nsec += (ts.tv_sec - (half.tv_sec * dividend)) * 1000000000 / dividend;
     assert(half.tv_nsec < 1000000000);
 
     return half;
@@ -174,6 +176,15 @@ struct timespec timespec_max(const struct timespec lhs, const struct timespec rh
 
 struct Stats make_stats(struct timespec *times, size_t time_count) {
     assert(time_count > 0);
+    if (time_count == 0) {
+        return (struct Stats){
+            .min = TS_ZERO,
+            .max = TS_ZERO,
+            .median = TS_ZERO,
+            .avg = TS_ZERO,
+            .sum = TS_ZERO,
+        };
+    }
     struct timespec ts_sum = TS_ZERO;
     for (size_t index = 0; index < time_count; ++ index) {
         ts_sum = timespec_add(ts_sum, times[index]);
@@ -275,9 +286,25 @@ void print_bench(const char *name, unsigned int max_name_len, const struct Stats
     }
 }
 
+void print_ast_buffer_stats(const struct AstBuffer *buffer) {
+    printf("\nAST buffer stats:\n");
+    struct AstBufferChunk *ptr = buffer->first;
+    if (ptr == NULL) {
+        printf("0 chunks, 0 nodes\n");
+    } else {
+        size_t index = 0;
+        size_t node_count = 0;
+        printf("index  size  capacity\n");
+        for (; ptr != NULL; ++ index) {
+            printf("%5zu  %4zu  %4zu\n", index, ptr->size, ptr->capacity);
+            node_count += ptr->size;
+            ptr = ptr->next;
+        }
+        printf("%zu chunks, %zu nodes\n", index, node_count);
+    }
+}
+
 void opt_item_free(struct OptItem *opt_item) {
-    ast_free(opt_item->expr);
-    ast_free(opt_item->opt_expr);
     bytecode_free(&opt_item->unopt_bytecode);
     bytecode_free(&opt_item->bytecode);
     bytecode_free(&opt_item->opt_bytecode);
@@ -413,11 +440,12 @@ int main(int argc, char *argv[]) {
     int res_start, res_end;
     size_t error_count = 0;
     struct Bytecode bytecode = BYTECODE_INIT();
+    struct AstBuffer buffer = AST_BUFFER_INIT();
 
     for (const struct ParseFunc *func = PARSE_FUNCS; func->name; ++ func) {
         printf("Testing with %s parser...\n", func->name);
         for (const struct TestCase *test = TESTS; test->expr; ++ test) {
-            struct AstNode *expr = func->parse(test->expr, &error);
+            struct AstNode *expr = func->parse(&buffer, test->expr, &error);
             if (expr == NULL) {
                 fprintf(stderr, "*** [%s] Error parsing expression: \"%s\"\n", func->name, test->expr);
                 print_parser_error(stderr, test->expr, &error, 1);
@@ -439,11 +467,10 @@ int main(int argc, char *argv[]) {
                     ast_print(stderr, expr);
 
                     if (func->parse != parse) {
-                        struct AstNode *rd_expr = parse(test->expr, NULL);
+                        struct AstNode *rd_expr = parse(&buffer, test->expr, NULL);
                         if (rd_expr != NULL) {
                             fprintf(stderr, "\nRD Parser:\n    ");
                             ast_print(stderr, rd_expr);
-                            ast_free(rd_expr);
                         }
                     }
 
@@ -529,7 +556,7 @@ int main(int argc, char *argv[]) {
                 bytecode_clear(&bytecode);
 
                 // Optimizations
-                struct AstNode *opt_expr = ast_optimize(expr);
+                struct AstNode *opt_expr = ast_optimize(&buffer, expr);
                 if (opt_expr == NULL) {
                     fprintf(stderr,
                         "*** [%s] Error optimizing expression \"%s\": %s\n",
@@ -633,12 +660,11 @@ int main(int argc, char *argv[]) {
                     }
 
                     bytecode_clear(&bytecode);
-                    ast_free(opt_expr);
                 }
 
                 ast_params_free(ast_params);
-                ast_free(expr);
             }
+            ast_buffer_clear(&buffer);
 
             // if (error_count > 0) {
             //     bytecode_free(&bytecode);
@@ -652,6 +678,7 @@ int main(int argc, char *argv[]) {
 
     if (error_count > 0) {
         fprintf(stderr, "%zu errors!\n", error_count);
+        ast_buffer_free(&buffer);
         return 1;
     }
 
@@ -665,6 +692,7 @@ int main(int argc, char *argv[]) {
     struct timespec *tok_times = calloc(ITERS, sizeof(struct timespec));
     if (tok_times == NULL) {
         perror("calloc(ITERS, sizeof(struct timespec))");
+        ast_buffer_free(&buffer);
         return 1;
     }
 
@@ -678,6 +706,7 @@ int main(int argc, char *argv[]) {
                     free(tok_times);
                     fprintf(stderr, "*** Error tokenizing expression: %s\n", test->expr);
                     fprintf(stderr, "Token: %s\n", get_token_name(tokenizer.token));
+                    ast_buffer_free(&buffer);
                     return 1;
                 }
 
@@ -709,20 +738,22 @@ int main(int argc, char *argv[]) {
     struct timespec *parse_times = calloc(PARSER_COUNT * ITERS, sizeof(struct timespec));
     if (parse_times == NULL) {
         perror("calloc(PARSER_COUNT * ITERS, sizeof(struct timespec))");
+        ast_buffer_free(&buffer);
         return 1;
     }
 
     for (size_t iter = 0; iter < ITERS; ++ iter) {
         res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
         for (const struct TestCase *test = TESTS; test->expr; ++ test) {
-            struct AstNode *expr = parse(test->expr, &error);
+            struct AstNode *expr = parse(&buffer, test->expr, &error);
             if (expr == NULL) {
                 fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
                 print_parser_error(stderr, test->expr, &error, 1);
                 free(parse_times);
+                ast_buffer_free(&buffer);
                 return 1;
             } else {
-                ast_free(expr);
+                ast_buffer_clear(&buffer);
             }
         }
         res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
@@ -734,14 +765,15 @@ int main(int argc, char *argv[]) {
     for (size_t iter = 0; iter < ITERS; ++ iter) {
         res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
         for (const struct TestCase *test = TESTS; test->expr; ++ test) {
-            struct AstNode *expr = fast_parse(test->expr, &error);
+            struct AstNode *expr = fast_parse(&buffer, test->expr, &error);
             if (expr == NULL) {
                 fprintf(stderr, "*** Error parsing expression: %s\n", test->expr);
                 print_parser_error(stderr, test->expr, &error, 1);
                 free(parse_times);
+                ast_buffer_free(&buffer);
                 return 1;
             } else {
-                ast_free(expr);
+                ast_buffer_clear(&buffer);
             }
         }
         res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
@@ -752,7 +784,7 @@ int main(int argc, char *argv[]) {
 
     struct Stats stats_slow_parser = make_stats(parse_times + INDEX_SLOW_PARSER * ITERS, ITERS);
     struct Stats stats_fast_parser = make_stats(parse_times + INDEX_FAST_PARSER * ITERS, ITERS);
-    struct Stats stats_parser_max = max_stats((struct Stats[]){
+    struct Stats stats_parser_max  = max_stats((struct Stats[]){
         stats_slow_parser,
         stats_fast_parser,
     }, PARSER_COUNT);
@@ -770,6 +802,7 @@ int main(int argc, char *argv[]) {
     struct OptItem *opt_items = calloc(test_count, sizeof(struct OptItem));
     if (opt_items == NULL) {
         perror("calloc(test_count, sizeof(struct OptItem))");
+        ast_buffer_free(&buffer);
         return 1;
     }
 
@@ -778,13 +811,13 @@ int main(int argc, char *argv[]) {
         struct OptItem *opt_item = &opt_items[index];
         const struct TestCase *test = &TESTS[index];
 
-        opt_item->expr = fast_parse(test->expr, NULL);
+        opt_item->expr = fast_parse(&buffer, test->expr, NULL);
         if (opt_item->expr == NULL) {
             perror("fast_parse(test->expr, NULL)");
             goto opt_init_loop_error;
         }
 
-        opt_item->opt_expr = ast_optimize(opt_item->expr);
+        opt_item->opt_expr = ast_optimize(&buffer, opt_item->expr);
         if (opt_item->opt_expr == NULL) {
             perror("ast_optimize(test->expr)");
             goto opt_init_loop_error;
@@ -854,6 +887,7 @@ int main(int argc, char *argv[]) {
         continue;
     opt_init_loop_error:
         opt_items_free(opt_items, index + 1);
+        ast_buffer_free(&buffer);
         return 1;
     }
 
@@ -861,6 +895,7 @@ int main(int argc, char *argv[]) {
     if (stack == NULL) {
         perror("calloc(max_stack_size, sizeof(int))");
         opt_items_free(opt_items, test_count);
+        ast_buffer_free(&buffer);
         return 1;
     }
 
@@ -878,6 +913,7 @@ int main(int argc, char *argv[]) {
         perror("calloc(test_count * ITERS * BENCH_COUNT, sizeof(struct timespec))");
         opt_items_free(opt_items, test_count);
         free(stack);
+        ast_buffer_free(&buffer);
         return 1;
     }
 
@@ -898,6 +934,7 @@ int main(int argc, char *argv[]) {
                 opt_items_free(opt_items, test_count);
                 free(stack);
                 free(exec_times);
+                ast_buffer_free(&buffer);
                 return 1;
             }
         }
@@ -924,6 +961,7 @@ int main(int argc, char *argv[]) {
                 opt_items_free(opt_items, test_count);
                 free(stack);
                 free(exec_times);
+                ast_buffer_free(&buffer);
                 return 1;
             }
         }
@@ -946,6 +984,7 @@ int main(int argc, char *argv[]) {
                 opt_items_free(opt_items, test_count);
                 free(stack);
                 free(exec_times);
+                ast_buffer_free(&buffer);
                 return 1;
             }
         }
@@ -968,6 +1007,7 @@ int main(int argc, char *argv[]) {
                 opt_items_free(opt_items, test_count);
                 free(stack);
                 free(exec_times);
+                ast_buffer_free(&buffer);
                 return 1;
             }
         }
@@ -990,6 +1030,7 @@ int main(int argc, char *argv[]) {
                 opt_items_free(opt_items, test_count);
                 free(stack);
                 free(exec_times);
+                ast_buffer_free(&buffer);
                 return 1;
             }
         }
@@ -1012,6 +1053,7 @@ int main(int argc, char *argv[]) {
                 opt_items_free(opt_items, test_count);
                 free(stack);
                 free(exec_times);
+                ast_buffer_free(&buffer);
                 return 1;
             }
         }
@@ -1034,6 +1076,7 @@ int main(int argc, char *argv[]) {
                 opt_items_free(opt_items, test_count);
                 free(stack);
                 free(exec_times);
+                ast_buffer_free(&buffer);
                 return 1;
             }
         }
@@ -1074,6 +1117,10 @@ int main(int argc, char *argv[]) {
     print_bench("optimized ast+optimized bytecode", 32, &stats_opt_bytecode_execute,        &stats_max);
 
     free(exec_times);
+
+    print_ast_buffer_stats(&buffer);
+
+    ast_buffer_free(&buffer);
 
     return 0;
 }
