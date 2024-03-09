@@ -14,7 +14,6 @@
 #include <sys/time.h>
 #include <inttypes.h>
 
-#define TS_TO_TV(TS) (struct timeval){ .tv_sec = (TS).tv_sec, .tv_usec = (TS).tv_nsec / 1000 }
 #define TS_TO_DBL(TS) ((double)(TS).tv_sec + (double)(TS).tv_nsec / 1000000000.0)
 #define ITERS 10000
 
@@ -226,43 +225,54 @@ struct Stats max_stats(const struct Stats *stats, size_t stats_count) {
     return max;
 }
 
+void print_bench_header_short(unsigned int max_name_len) {
+    printf("%*s  %-16s  %-10s  %-10s  %-10s  %-10s\n", max_name_len, "", "sum", "min", "max", "avg", "median");
+}
+
 void print_bench_header(unsigned int max_name_len) {
     printf("%*s  %-16s  %-10s  %-10s  %-10s  %-10s  %s\n", max_name_len, "", "sum", "min", "max", "avg", "median", "relative to median");
 }
 
 void print_bench(const char *name, unsigned int max_name_len, const struct Stats *stats, const struct Stats *max) {
-    double dbl_median = TS_TO_DBL(stats->median);
-    double dbl_min = TS_TO_DBL(stats->min);
-    double dbl_max = TS_TO_DBL(stats->max);
-    double dbl_max_median = TS_TO_DBL(max->median);
-    // double dbl_max_min    = TS_TO_DBL(max->min);
-    // double dbl_max_max    = TS_TO_DBL(max->max);
-
-    double dbl_median_prec = 100.0 * dbl_median / dbl_max_median;
-    // double perc_plus  = 100.0 * dbl_max / dbl_max_median - dbl_median_prec;
-    // double perc_minus = dbl_median_prec - 100.0 * dbl_min / dbl_max_median;
-    // double perc_margin = MAX(perc_plus, perc_minus);
-
-    double dbl_factor = dbl_max_median / dbl_median;
-
     size_t name_len = strlen(name);
     int padding = name_len <= max_name_len ? max_name_len - (int)name_len : 0;
 
     printf(
-        "%s:%*s %2" PRIi64 ".%09ld sec  %5.3lf msec  %5.3lf msec  %5.3lf msec  %5.3lf msec  %6.2lf %%  %4.2lfx (%4.2lfx ... %4.2lfx)\n",
+        "%s:%*s %2" PRIi64 ".%09ld sec  %5.3lf msec  %5.3lf msec  %5.3lf msec  %5.3lf msec",
         name, padding, "",
         stats->sum.tv_sec, stats->sum.tv_nsec,
 
         TS_TO_DBL(stats->min) * 1000,
         TS_TO_DBL(stats->max) * 1000,
         TS_TO_DBL(stats->avg) * 1000,
-        TS_TO_DBL(stats->median) * 1000,
-
-        dbl_median_prec,
-        dbl_factor,
-        dbl_max_median / dbl_max,
-        dbl_max_median / dbl_min
+        TS_TO_DBL(stats->median) * 1000
     );
+
+    if (max != NULL) {
+        double dbl_median = TS_TO_DBL(stats->median);
+        double dbl_min = TS_TO_DBL(stats->min);
+        double dbl_max = TS_TO_DBL(stats->max);
+        double dbl_max_median = TS_TO_DBL(max->median);
+        // double dbl_max_min    = TS_TO_DBL(max->min);
+        // double dbl_max_max    = TS_TO_DBL(max->max);
+
+        double dbl_median_prec = 100.0 * dbl_median / dbl_max_median;
+        // double perc_plus  = 100.0 * dbl_max / dbl_max_median - dbl_median_prec;
+        // double perc_minus = dbl_median_prec - 100.0 * dbl_min / dbl_max_median;
+        // double perc_margin = MAX(perc_plus, perc_minus);
+
+        double dbl_factor = dbl_max_median / dbl_median;
+
+        printf(
+            "  %6.2lf %%  %4.2lfx (%4.2lfx ... %4.2lfx)\n",
+            dbl_median_prec,
+            dbl_factor,
+            dbl_max_median / dbl_max,
+            dbl_max_median / dbl_min
+        );
+    } else {
+        putchar('\n');
+    }
 }
 
 void opt_item_free(struct OptItem *opt_item) {
@@ -650,15 +660,55 @@ int main(int argc, char *argv[]) {
         ++ test_count;
     }
 
+    printf("\nBenchmarking tokenizer with %d iterantions:\n\n", ITERS);
+
+    struct timespec *tok_times = calloc(ITERS, sizeof(struct timespec));
+    if (tok_times == NULL) {
+        perror("calloc(ITERS, sizeof(struct timespec))");
+        return 1;
+    }
+
+    for (size_t iter = 0; iter < ITERS; ++ iter) {
+        res_start = clock_gettime(CLOCK_MONOTONIC, &ts_start);
+        for (const struct TestCase *test = TESTS; test->expr; ++ test) {
+            struct Tokenizer tokenizer = TOKENIZER_INIT(test->expr);
+
+            while (tokenizer.token != TOK_EOF) {
+                if (token_is_error(tokenizer.token)) {
+                    free(tok_times);
+                    fprintf(stderr, "*** Error tokenizing expression: %s\n", test->expr);
+                    fprintf(stderr, "Token: %s\n", get_token_name(tokenizer.token));
+                    return 1;
+                }
+
+                next_token(&tokenizer);
+            }
+
+            tokenizer_free(&tokenizer);
+        }
+        res_end = clock_gettime(CLOCK_MONOTONIC, &ts_end);
+        assert(res_start == 0); (void)res_start;
+        assert(res_end == 0); (void)res_end;
+        tok_times[iter] = timespec_sub(ts_end, ts_start);
+    }
+
+    struct Stats stats_tokenizer = make_stats(tok_times, ITERS);
+
+    printf("Tokenizer benchmark result:\n");
+    print_bench_header_short(9);
+    print_bench("Tokenizer", 9, &stats_tokenizer, NULL);
+
+    free(tok_times);
+
     printf("\nBenchmarking parsing with %d iterations:\n\n", ITERS);
 
 #define PARSER_COUNT 2
 #define INDEX_SLOW_PARSER 0
 #define INDEX_FAST_PARSER 1
 
-    struct timespec *parse_times = calloc(PARSER_COUNT * ITERS * test_count, sizeof(struct timespec));
+    struct timespec *parse_times = calloc(PARSER_COUNT * ITERS, sizeof(struct timespec));
     if (parse_times == NULL) {
-        perror("calloc(PARSER_COUNT * ITERS * test_count, sizeof(struct timespec))");
+        perror("calloc(PARSER_COUNT * ITERS, sizeof(struct timespec))");
         return 1;
     }
 
