@@ -1,5 +1,7 @@
 #include "tokenizer.h"
 
+#undef token_is_error
+
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -9,55 +11,45 @@ void tokenizer_free(struct Tokenizer *tokenizer) {
     tokenizer->input_pos = 0;
     tokenizer->token = TOK_EOF;
     tokenizer->value = -1;
-    if (tokenizer->ident != NULL) {
-        free(tokenizer->ident);
-        tokenizer->ident = NULL;
-    }
+    tokenizer->ident_start  = 0;
+    tokenizer->ident_length = 0;
 }
 
 bool token_is_error(enum TokenType token) {
-    switch (token) {
-    case TOK_ERROR_TOKEN:
-    case TOK_ERROR_MEMORY:
-        return true;
-    
-    default:
-        return false;
-    }
+    return TOKEN_IS_ERROR(token);
 }
 
 const char *get_token_name(enum TokenType token) {
     switch (token) {
-    case TOK_START:        return "<START>";
-    case TOK_EOF:          return "<EOF>";
-    case TOK_ERROR_TOKEN:  return "<ILLEGAL TOKEN>";
-    case TOK_ERROR_MEMORY: return "<MEMORY ERROR>";
-    case TOK_PLUS:         return "+";
-    case TOK_MINUS:        return "-";
-    case TOK_MUL:          return "*";
-    case TOK_DIV:          return "/";
-    case TOK_MOD:          return "%";
-    case TOK_INT:          return "<INTEGER>";
-    case TOK_IDENT:        return "<IDENTIFIER>";
-    case TOK_LPAREN:       return "(";
-    case TOK_RPAREN:       return ")";
-    case TOK_QUEST:        return "?";
-    case TOK_COLON:        return ":";
-    case TOK_BIT_OR:       return "|";
-    case TOK_BIT_XOR:      return "^";
-    case TOK_BIT_AND:      return "&";
-    case TOK_BIT_NEG:      return "~";
-    case TOK_NOT:          return "!";
-    case TOK_AND:          return "&&";
-    case TOK_OR:           return "||";
-    case TOK_LT:           return "<";
-    case TOK_GT:           return ">";
-    case TOK_LE:           return "<=";
-    case TOK_GE:           return ">=";
-    case TOK_EQ:           return "==";
-    case TOK_NE:           return "!=";
-    case TOK_LSHIFT:       return "<<";
-    case TOK_RSHIFT:       return ">>";
+    case TOK_START:       return "<START>";
+    case TOK_EOF:         return "<EOF>";
+    case TOK_ERROR_TOKEN: return "<ILLEGAL TOKEN>";
+    case TOK_PLUS:        return "+";
+    case TOK_MINUS:       return "-";
+    case TOK_MUL:         return "*";
+    case TOK_DIV:         return "/";
+    case TOK_MOD:         return "%";
+    case TOK_INT:         return "<INTEGER>";
+    case TOK_IDENT:       return "<IDENTIFIER>";
+    case TOK_LPAREN:      return "(";
+    case TOK_RPAREN:      return ")";
+    case TOK_QUEST:       return "?";
+    case TOK_COLON:       return ":";
+    case TOK_BIT_OR:      return "|";
+    case TOK_BIT_XOR:     return "^";
+    case TOK_BIT_AND:     return "&";
+    case TOK_BIT_NEG:     return "~";
+    case TOK_NOT:         return "!";
+    case TOK_AND:         return "&&";
+    case TOK_OR:          return "||";
+    case TOK_LT:          return "<";
+    case TOK_GT:          return ">";
+    case TOK_LE:          return "<=";
+    case TOK_GE:          return ">=";
+    case TOK_EQ:          return "==";
+    case TOK_NE:          return "!=";
+    case TOK_LSHIFT:      return "<<";
+    case TOK_RSHIFT:      return ">>";
     default:
         assert(false);
         return "illegal token enum value";
@@ -76,11 +68,6 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
     if (tokenizer->peeked) {
         tokenizer->peeked = false;
         return tokenizer->token;
-    }
-
-    if (tokenizer->ident != NULL) {
-        free(tokenizer->ident);
-        tokenizer->ident = NULL;
     }
 
     // One could cache fields of the tokenizer as locals like this and only
@@ -245,16 +232,9 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
                 ch = tokenizer->input[tokenizer->input_pos];
             } while ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_' || (ch >= '0' && ch <= '9'));
 
-            size_t len = tokenizer->input_pos - start_pos;
-            char *ident = malloc(len + 1);
-            if (ident == NULL) {
-                return tokenizer->token = TOK_ERROR_MEMORY;
-            }
+            tokenizer->ident_start  = start_pos;
+            tokenizer->ident_length = tokenizer->input_pos - start_pos;
 
-            memcpy(ident, tokenizer->input + start_pos, len);
-            ident[len] = 0;
-
-            tokenizer->ident = ident;
             return tokenizer->token = TOK_IDENT;
         }
         case '0':
@@ -283,4 +263,16 @@ enum TokenType next_token(struct Tokenizer *tokenizer) {
         default:
             return tokenizer->token = TOK_ERROR_TOKEN;
     }
+}
+
+char *tokenizer_get_ident(const struct Tokenizer *tokenizer) {
+    assert(tokenizer->token == TOK_IDENT);
+    size_t len = tokenizer->ident_length;
+    char *ident = malloc(len + 1);
+    if (ident == NULL) {
+        return NULL;
+    }
+    memcpy(ident, tokenizer->input + tokenizer->ident_start, len);
+    ident[len] = 0;
+    return ident;
 }

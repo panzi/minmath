@@ -12,8 +12,7 @@ extern "C" {
 enum TokenType {
     TOK_START   = 0,
     TOK_EOF     = -1,
-    TOK_ERROR_TOKEN  = -2,
-    TOK_ERROR_MEMORY = -3,
+    TOK_ERROR_TOKEN = -2,
     TOK_PLUS    = '+',
     TOK_MINUS   = '-',
     TOK_MUL     = '*',
@@ -50,7 +49,8 @@ struct Tokenizer {
     enum TokenType token;
     bool peeked;
     int value;
-    char *ident;
+    size_t ident_start;
+    size_t ident_length;
 };
 
 #define TOKENIZER_INIT(INPUT) {  \
@@ -60,7 +60,8 @@ struct Tokenizer {
     .token  = TOK_START,         \
     .peeked = false,             \
     .value  = -1,                \
-    .ident  = NULL,              \
+    .ident_start  = 0,           \
+    .ident_length = 0,           \
 }
 
 enum TokenType peek_token(struct Tokenizer *tokenizer);
@@ -68,6 +69,10 @@ enum TokenType next_token(struct Tokenizer *tokenizer);
 bool token_is_error(enum TokenType token);
 void tokenizer_free(struct Tokenizer *tokenizer);
 const char *get_token_name(enum TokenType token);
+char *tokenizer_get_ident(const struct Tokenizer *tokenizer);
+
+#define TOKEN_IS_ERROR(token) ((token) == TOK_ERROR_TOKEN)
+#define token_is_error(token) TOKEN_IS_ERROR(token)
 
 #ifdef __cplusplus
 }

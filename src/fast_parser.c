@@ -1,6 +1,7 @@
 #include "fast_parser.h"
 
 #include <assert.h>
+#include <stdlib.h>
 #include <stdbool.h>
 
 static struct AstNode *fast_parse_expression(struct FastParser *parser, int min_precedence);
@@ -193,17 +194,23 @@ struct AstNode *fast_parse_leaf(struct FastParser *parser) {
             break;
 
         case TOK_IDENT:
-            // re-use memory allocated for tokenizer->ident
-            child = ast_create_var(parser->tokenizer.ident);
+        {
+            char *name = tokenizer_get_ident(&parser->tokenizer);
+            if (name == NULL) {
+                parser->error.error  = PARSER_ERROR_MEMORY;
+                parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+                return NULL;
+            }
+            child = ast_create_var(name);
             if (child == NULL) {
+                free(name);
                 ast_free(top);
                 parser->error.error  = PARSER_ERROR_MEMORY;
                 parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
                 return NULL;
             }
-            parser->tokenizer.ident = NULL;
             break;
-
+        }
         case TOK_LPAREN:
         {
             size_t start_offset = parser->tokenizer.token_pos;
