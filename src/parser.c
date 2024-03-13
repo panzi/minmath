@@ -1,5 +1,7 @@
 #include "parser.h"
 
+#include <stdlib.h>
+
 static struct AstNode *parse_condition(struct Parser *parser);
 static struct AstNode *parse_or(struct Parser *parser);
 static struct AstNode *parse_and(struct Parser *parser);
@@ -471,14 +473,19 @@ struct AstNode *parse_atom(struct Parser *parser) {
         }
         case TOK_IDENT:
         {
-            // re-use memory allocated for tokenizer->ident
-            struct AstNode *expr = ast_create_var(parser->buffer, parser->tokenizer.ident);
-            if (expr == NULL) {
+            char *name = tokenizer_get_ident(&parser->tokenizer);
+            if (name == NULL) {
                 parser->error.error  = PARSER_ERROR_MEMORY;
                 parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
                 return NULL;
             }
-            parser->tokenizer.ident = NULL;
+            struct AstNode *expr = ast_create_var(parser->buffer, name);
+            if (expr == NULL) {
+                free(name);
+                parser->error.error  = PARSER_ERROR_MEMORY;
+                parser->error.offset = parser->error.context_offset = parser->tokenizer.token_pos;
+                return NULL;
+            }
             return expr;
         }
         case TOK_LPAREN:
